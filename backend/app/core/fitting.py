@@ -324,7 +324,8 @@ def calculate_mape(
 
 def fit_cips2008_model(
     experiment_data: List[Dict],
-    fixed_params: Optional[Dict[str, float]] = None
+    fixed_params: Optional[Dict[str, float]] = None,
+    couple_vd_to_k: bool = False
 ) -> FittingResult:
     """Specialized fitting for CIPS 2008 IGBT lifetime model parameters.
 
@@ -354,6 +355,8 @@ def fit_cips2008_model(
             - 'Nf': Cycles to failure (observed)
         fixed_params: Optional dictionary of parameters to fix at
             specific values (not fitted). For example: {'β3': -0.5}
+        couple_vd_to_k: If True, β5/β6 effects are coupled into K_eff
+            (requires V and D to be constant across all experiment points).
 
     Returns:
         FittingResult with fitted K and β parameters.
@@ -402,9 +405,9 @@ def fit_cips2008_model(
         'β6': -0.5     # D exponent
     }
 
-    # Determine which parameters are fixed (user-specified or auto-detected from constant data)
-    fixed_betas = {}  # β parameters that are fixed (will be merged into K)
-    fixed_data_values = {}  # Actual data values for fixed parameters
+    # Determine which parameters are fixed (user-specified)
+    fixed_betas = {}  # β parameters that are fixed (not fitted)
+    fixed_data_values = {}  # Optional metadata values for fixed parameters
 
     # Process user-specified fixed parameters
     if fixed_params:
@@ -412,28 +415,37 @@ def fit_cips2008_model(
             if name in default_betas:
                 fixed_betas[name] = beta_value
 
-    # Auto-detect constant data and fix corresponding parameters
     auto_fixed_info = []
-    if np.all(t_on == t_on[0]) and 'β3' not in fixed_betas:
-        fixed_betas['β3'] = default_betas['β3']
-        fixed_data_values['ton'] = t_on[0]
-        auto_fixed_info.append(f'β3 (ton={t_on[0]}s)')
-    if np.all(I == I[0]) and 'β4' not in fixed_betas:
-        fixed_betas['β4'] = default_betas['β4']
-        fixed_data_values['I'] = I[0]
-        auto_fixed_info.append(f'β4 (I={I[0]}A)')
-    if np.all(V == V[0]) and 'β5' not in fixed_betas:
-        fixed_betas['β5'] = default_betas['β5']
-        fixed_data_values['V'] = V[0]
-        auto_fixed_info.append(f'β5 (V={V[0]}V)')
-    if np.all(D == D[0]) and 'β6' not in fixed_betas:
-        fixed_betas['β6'] = default_betas['β6']
-        fixed_data_values['D'] = D[0]
-        auto_fixed_info.append(f'β6 (D={D[0]}μm)')
 
-    # Parameters to fit (only those not fixed)
-    params_to_fit = [p for p in ['β1', 'β2', 'β3', 'β4', 'β5', 'β6'] if p not in fixed_betas]
-    n_params = len(params_to_fit) + 1  # +1 for K_eff
+    # Optional model simplification for same product class:
+    # couple V/D related terms into K_eff.
+    coupled_betas = set()
+    if couple_vd_to_k:
+        if not np.allclose(V, V[0]):
+            raise FittingError("V must be constant when couple_vd_to_k=True")
+        if not np.allclose(D, D[0]):
+            raise FittingError("D must be constant when couple_vd_to_k=True")
+
+        coupled_betas.update({'β5', 'β6'})
+        if 'β5' not in fixed_betas:
+            fixed_betas['β5'] = default_betas['β5']
+        if 'β6' not in fixed_betas:
+            fixed_betas['β6'] = default_betas['β6']
+
+        fixed_data_values['V'] = float(V[0])
+        fixed_data_values['D'] = float(D[0])
+        auto_fixed_info.append(f"V/D耦合到K_eff (V={V[0]}, D={D[0]})")
+
+    # Store constant values for explicitly fixed non-coupled parameters (metadata only)
+    if 'β3' in fixed_betas and np.allclose(t_on, t_on[0]):
+        fixed_data_values['ton'] = float(t_on[0])
+    if 'β4' in fixed_betas and np.allclose(I, I[0]):
+        fixed_data_values['I'] = float(I[0])
+
+    # Parameters to fit (only those not fixed/coupled)
+    params_to_fit = [p for p in ['β1', 'β2', 'β3', 'β4', 'β5', 'β6'] if p not in fixed_betas and p not in coupled_betas]
+    k_name = 'ln_K_eff' if couple_vd_to_k else 'ln_K'
+    n_params = len(params_to_fit) + 1  # +1 for K/K_eff
 
     min_points = max(2, n_params)
     if n_points < min_points:
@@ -441,45 +453,41 @@ def fit_cips2008_model(
             f"At least {min_points} data points required for fitting {n_params} parameters"
         )
 
-    # Calculate fixed factor that will be merged into K
-    # ln(fixed_factor) = β3*ln(ton) + β4*ln(I) + β5*ln(V) + β6*ln(D)
-    ln_fixed_factor = 0.0
-    if 'β3' in fixed_betas:
-        ln_fixed_factor += fixed_betas['β3'] * np.log(t_on[0])
-    if 'β4' in fixed_betas:
-        ln_fixed_factor += fixed_betas['β4'] * np.log(I[0])
-    if 'β5' in fixed_betas:
-        ln_fixed_factor += fixed_betas['β5'] * np.log(V[0])
-    if 'β6' in fixed_betas:
-        ln_fixed_factor += fixed_betas['β6'] * np.log(D[0])
-
-    # Build simplified prediction function (only varying parameters)
-    # Model: ln(Nf) = ln(K_eff) + β1*ln(dTj) + β2/Tj_max_kelvin
-    # where K_eff = K * (fixed factors)
-    def cips2008_predict_simplified(X, ln_K_eff, **params):
-        """Simplified prediction function for CIPS 2008 model.
-
-        Only includes varying parameters. Fixed parameters are already merged into K_eff.
-        """
-        # Get beta values for varying parameters
-        beta1 = params.get('β1', default_betas['β1'])
-        beta2 = params.get('β2', default_betas['β2'])
+    def cips2008_predict_ln(X, **params):
+        """Prediction function in log-space for CIPS 2008 model."""
+        beta_values = {}
+        for beta_name in ['β1', 'β2', 'β3', 'β4', 'β5', 'β6']:
+            if beta_name in params:
+                beta_values[beta_name] = params[beta_name]
+            elif beta_name in fixed_betas:
+                beta_values[beta_name] = fixed_betas[beta_name]
+            else:
+                beta_values[beta_name] = default_betas[beta_name]
 
         Tj_max_kelvin = Tj_max + 273.15
 
-        # Simplified model: only dTj and Tj_max vary
-        ln_Nf_pred = ln_K_eff + beta1 * np.log(dTj) + beta2 / Tj_max_kelvin
+        ln_nf = (
+            params[k_name]
+            + beta_values['β1'] * np.log(dTj)
+            + beta_values['β2'] / Tj_max_kelvin
+            + beta_values['β3'] * np.log(t_on)
+            + beta_values['β4'] * np.log(I)
+        )
 
-        return ln_Nf_pred
+        if not couple_vd_to_k:
+            ln_nf = ln_nf + beta_values['β5'] * np.log(V) + beta_values['β6'] * np.log(D)
+
+        return ln_nf
 
     # Initial guesses for parameters to fit
-    initial_params = {'ln_K_eff': np.log(1e10)}
+    initial_params = {k_name: float(np.log(max(np.median(Nf_observed), 1.0)))}
     for p in params_to_fit:
         initial_params[p] = default_betas[p]
 
     # Parameter bounds
     param_bounds = {
-        'ln_K_eff': (-50, 100),  # K_eff can be very large or small
+        'ln_K': (-50, 100),
+        'ln_K_eff': (-50, 100),
         'β1': (-10, 0),
         'β2': (0, 20000),  # Relax upper bound for Arrhenius coefficient
         'β3': (-2, 1),
@@ -491,7 +499,7 @@ def fit_cips2008_model(
 
     try:
         result = fit_lifetime_model(
-            cips2008_predict_simplified,
+            cips2008_predict_ln,
             np.arange(len(Nf_observed)),
             np.log(Nf_observed),
             initial_params,
@@ -500,25 +508,77 @@ def fit_cips2008_model(
     except FittingError as e:
         raise FittingError(f"CIPS 2008 model fitting failed: {str(e)}") from e
 
-    # Extract fitted K_eff
-    ln_K_eff = result.parameters['ln_K_eff']
-    K_eff = float(np.exp(ln_K_eff))
+    # Build complete beta values (fitted + fixed)
+    final_beta_values = {}
+    for p in ['β1', 'β2', 'β3', 'β4', 'β5', 'β6']:
+        if p in result.parameters:
+            final_beta_values[p] = float(result.parameters[p])
+        elif p in fixed_betas:
+            final_beta_values[p] = float(fixed_betas[p])
+        else:
+            final_beta_values[p] = float(default_betas[p])
 
-    # Build final parameters dict - only include what's needed for prediction
-    final_params = {
-        'K_eff': K_eff,  # Use this for prediction with simplified model
-    }
+    ln_k_value = float(result.parameters[k_name])
+    k_value = float(np.exp(ln_k_value))
 
-    # Only add β parameters that were actually fitted (not fixed)
+    # Couple fixed-constant stress terms among β3~β6 into returned K.
+    def _compute_coupled_factor(beta_keys: List[str]) -> Optional[float]:
+        factor_log = 0.0
+        data_map = {
+            'β3': t_on,
+            'β4': I,
+            'β5': V,
+            'β6': D,
+        }
+
+        used_any = False
+        for beta_key in beta_keys:
+            if beta_key not in fixed_betas:
+                continue
+
+            values = data_map[beta_key]
+            if not np.allclose(values, values[0]):
+                return None
+
+            factor_log += final_beta_values[beta_key] * np.log(float(values[0]))
+            used_any = True
+
+        if not used_any:
+            return None
+
+        return float(np.exp(np.clip(factor_log, -700, 700)))
+
+    vd_factor = _compute_coupled_factor(['β5', 'β6'])
+    if vd_factor is None or vd_factor <= 0:
+        vd_factor = 1.0
+
+    full_coupled_factor = _compute_coupled_factor(['β3', 'β4', 'β5', 'β6'])
+    if full_coupled_factor is None or full_coupled_factor <= 0:
+        full_coupled_factor = 1.0
+
+    if couple_vd_to_k:
+        # fitted k_value is V/D-coupled, recover base K then couple all fixed terms
+        k_base = float(k_value / vd_factor)
+        returned_k = float(k_base * full_coupled_factor)
+    else:
+        # fitted k_value is base K, couple all fixed terms directly
+        returned_k = float(k_value * full_coupled_factor)
+
+    final_params = {'K': returned_k}
     for p in params_to_fit:
         if p in result.parameters:
             final_params[p] = float(result.parameters[p])
 
     # Build confidence intervals
     final_ci = {}
-    if 'ln_K_eff' in result.confidence_intervals:
-        ln_k_eff_ci = result.confidence_intervals['ln_K_eff']
-        final_ci['K_eff'] = (float(np.exp(ln_k_eff_ci[0])), float(np.exp(ln_k_eff_ci[1])))
+    if k_name in result.confidence_intervals:
+        ln_k_ci = result.confidence_intervals[k_name]
+        k_ci = (
+            float(np.exp(np.clip(ln_k_ci[0], -700, 700))),
+            float(np.exp(np.clip(ln_k_ci[1], -700, 700)))
+        )
+        scale_factor = float(returned_k / k_value) if k_value != 0 else 1.0
+        final_ci['K'] = (float(k_ci[0] * scale_factor), float(k_ci[1] * scale_factor))
 
     for p in params_to_fit:
         if p in result.confidence_intervals:
@@ -527,17 +587,18 @@ def fit_cips2008_model(
 
     # Build std_errors
     final_std_errors = {}
-    if 'ln_K_eff' in result.std_errors:
-        final_std_errors['K_eff'] = float(K_eff * result.std_errors['ln_K_eff'])
+    if k_name in result.std_errors and result.std_errors[k_name] is not None:
+        sigma_ln_k = float(result.std_errors[k_name])
+        final_std_errors['K'] = float(returned_k * sigma_ln_k)
+    else:
+        final_std_errors['K'] = None
 
     for p in params_to_fit:
         if p in result.std_errors and result.std_errors[p] is not None:
             final_std_errors[p] = float(result.std_errors[p])
-        elif p in params_to_fit:
-            final_std_errors[p] = None
 
     # Calculate predictions in linear space for metrics
-    ln_Nf_pred = cips2008_predict_simplified(None, **result.parameters)
+    ln_Nf_pred = cips2008_predict_ln(None, **result.parameters)
     Nf_pred = np.exp(ln_Nf_pred)
 
     r_squared_linear = float(calculate_r_squared(Nf_observed, Nf_pred))

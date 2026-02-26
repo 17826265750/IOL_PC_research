@@ -26,7 +26,6 @@ import {
   CheckCircle,
   Warning,
 } from '@mui/icons-material'
-import ReactECharts from 'echarts-for-react'
 import type { PredictionResult } from '@/types'
 import type { ExportFormat } from '@/types'
 
@@ -76,139 +75,6 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
       return { color: 'warning', label: '良好' }
     }
     return { color: 'error', label: '需关注' }
-  }
-
-  const getContributionData = (result: PredictionResult) => {
-    // Calculate factor contributions based on cycle results
-    const contributions = result.cycleResults.map((cr) => ({
-      name: `Cycle ${cr.index + 1}`,
-      value: cr.damagePerCycle * 100,
-      deltaT: cr.deltaT,
-    }))
-
-    return contributions
-  }
-
-  const getPieOption = (result: PredictionResult) => {
-    const contributions = getContributionData(result)
-
-    // Use scientific notation for small values
-    const formatValue = (val: number) => {
-      if (val < 0.01) {
-        return val.toExponential(2)
-      }
-      return val.toFixed(4)
-    }
-
-    return {
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: { name: string; value: number; percent: number }) => {
-          return `${params.name}<br/>值: ${formatValue(params.value)}%`
-        },
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        textStyle: { fontSize: 12 },
-      },
-      series: [
-        {
-          name: '损伤贡献 / Damage Contribution',
-          type: 'pie',
-          radius: ['40%', '70%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 10,
-            borderColor: '#fff',
-            borderWidth: 2,
-          },
-          label: {
-            show: true,
-            position: 'outside',
-            formatter: (params: { name: string; percent: number }) => {
-              return `${params.percent.toFixed(1)}%`
-            },
-            fontSize: 11,
-          },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: 14,
-              fontWeight: 'bold',
-            },
-          },
-          labelLine: {
-            show: true,
-          },
-          data: contributions.map((c, idx) => ({
-            value: Math.max(c.value, 0.001), // Minimum value for visibility
-            name: `${c.name} (ΔT: ${c.deltaT.toFixed(1)}°C)`,
-            itemStyle: {
-              color: ['#1976d2', '#388e3c', '#f57c00', '#d32f2f', '#7b1fa2'][idx % 5]
-            }
-          })),
-        },
-      ],
-    }
-  }
-
-  const getBarOption = (result: PredictionResult) => {
-    const contributions = getContributionData(result)
-
-    return {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: {
-          type: 'shadow',
-        },
-        formatter: (params: Array<{ name: string; value: number; data: { value: number; itemStyle: { color: string } } }>) => {
-          if (params && params.length > 0) {
-            const p = params[0]
-            return `${p.name}<br/>损伤: ${p.value.toExponential(4)}`
-          }
-          return ''
-        },
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category',
-        data: contributions.map((c) => c.name),
-        axisLabel: {
-          fontSize: 10,
-        },
-      },
-      yAxis: {
-        type: 'value',
-        name: '损伤/循环',
-        axisLabel: {
-          formatter: (value: number) => value.toExponential(1),
-        },
-      },
-      series: [
-        {
-          name: '损伤贡献',
-          type: 'bar',
-          data: contributions.map((c) => ({
-            value: c.value,
-            itemStyle: {
-              color: c.deltaT > 80 ? '#ef5350' : c.deltaT > 60 ? '#ffa726' : '#66bb6a',
-            },
-          })),
-          label: {
-            show: true,
-            position: 'top',
-            formatter: (params: { value: number }) => params.value.toExponential(2),
-            fontSize: 9,
-          },
-        },
-      ],
-    }
   }
 
   if (loading) {
@@ -269,7 +135,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Timeline color="primary" />
-          <Typography variant="h6">预测结果 / Prediction Results</Typography>
+          <Typography variant="h6">预测结果（以 Nf 为核心） / Prediction Results (Nf-Centric)</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {(['csv', 'json', 'xlsx'] as ExportFormat[]).map((format) => (
@@ -296,7 +162,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
               height: '100%',
               border: 2,
               borderColor: `${status.color}.main`,
-              background: `linear-gradient(135deg, ${status.color}.main 0%, ${status.color}.dark 100%)`,
+              bgcolor: `${status.color}.main`,
               color: 'white',
             }}
           >
@@ -308,7 +174,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
                 </Typography>
               </Box>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                预测循环次数 / Predicted Cycles
+                等效失效循环次数 Nf / Cycles To Failure (Nf)
               </Typography>
               <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Chip
@@ -331,7 +197,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">
-                预计寿命 / Estimated Lifetime
+                折算日历寿命（按当前循环时长）/ Estimated Calendar Lifetime
               </Typography>
               <Typography variant="h5" sx={{ mt: 1, fontWeight: 600, color: 'primary.main' }}>
                 {formatHours(result.lifetimeHours)}
@@ -368,11 +234,11 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
         <Paper sx={{ p: 2, mb: 2, border: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <Info color="info" sx={{ mr: 1, fontSize: 20 }} />
-            <Typography variant="subtitle2">置信区间 / Confidence Interval (95%)</Typography>
+            <Typography variant="subtitle2">Nf 置信区间 / Nf Confidence Interval (95%)</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              下限 / Lower: {formatNumber(result.confidenceLower, 0)}
+              下限 / Lower: {formatNumber(result.confidenceLower, 0)} cycles
             </Typography>
             <Box sx={{ flex: 1, height: 8, bgcolor: 'divider', borderRadius: 1, position: 'relative' }}>
               <Box
@@ -398,35 +264,11 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
               />
             </Box>
             <Typography variant="body2" color="text.secondary">
-              上限 / Upper: {formatNumber(result.confidenceUpper, 0)}
+              上限 / Upper: {formatNumber(result.confidenceUpper, 0)} cycles
             </Typography>
           </Box>
         </Paper>
       )}
-
-      {/* Charts */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom>
-                损伤分布 / Damage Distribution
-              </Typography>
-              <ReactECharts option={getPieOption(result)} style={{ height: 300 }} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom>
-                各循环损伤 / Cycle Damage
-              </Typography>
-              <ReactECharts option={getBarOption(result)} style={{ height: 300 }} />
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
       {/* Detailed Results Table */}
       <Paper sx={{ mb: 2 }}>
@@ -439,9 +281,9 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result, loading, e
               <TableRow>
                 <TableCell>循环 / Cycle</TableCell>
                 <TableCell>ΔT (°C)</TableCell>
-                <TableCell align="right">预测寿命 / Nf</TableCell>
-                <TableCell align="right">损伤/循环 / Damage/Cycle</TableCell>
-                <TableCell align="right">累计损伤 / Cumulative</TableCell>
+                <TableCell align="right">失效循环数 Nf (cycles)</TableCell>
+                <TableCell align="right">每循环损伤 D_i</TableCell>
+                <TableCell align="right">累计损伤 ΣD</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

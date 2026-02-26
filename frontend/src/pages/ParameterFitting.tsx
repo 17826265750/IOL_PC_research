@@ -25,7 +25,6 @@ import {
   FormControl,
   InputLabel,
   Checkbox,
-  FormControlLabel,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -59,6 +58,7 @@ interface FittingResult {
   fixed_params?: Record<string, number>
   fixed_data_values?: Record<string, number>
   auto_fixed_info?: string[]
+  couple_vd_to_k?: boolean
 }
 
 const MODEL_OPTIONS: { value: LifetimeModelType; label: string }[] = [
@@ -128,10 +128,10 @@ export const ParameterFitting: React.FC = () => {
       }
     }
     return {
-      ton: { enabled: true, value: 2 },
-      I: { enabled: true, value: 100 },
-      V: { enabled: true, value: 1200 },
-      D: { enabled: true, value: 300 },
+      ton: { enabled: false, value: 2 },
+      I: { enabled: false, value: 100 },
+      V: { enabled: false, value: 1200 },
+      D: { enabled: false, value: 300 },
     }
   })
   const [fittingResult, setFittingResult] = useState<FittingResult | null>(() => {
@@ -177,8 +177,24 @@ export const ParameterFitting: React.FC = () => {
 
   // 计算最少需要的数据点数（7个参数 - 固定参数数量）
   const getMinDataPoints = () => {
-    const fixedCount = Object.values(fixedParams).filter(p => p.enabled).length
-    return Math.max(3, 7 - fixedCount)
+    let fixedCount = 0
+    if (fixedParams.ton.enabled) fixedCount += 1
+    if (fixedParams.I.enabled) fixedCount += 1
+    if (fixedParams.V.enabled) fixedCount += 1
+    if (fixedParams.D.enabled) fixedCount += 1
+
+    const fittedParamCount = 7 - fixedCount
+
+    return Math.max(2, fittedParamCount)
+  }
+
+  const getReducedParamCount = () => {
+    let reducedCount = 0
+    if (fixedParams.ton.enabled) reducedCount += 1
+    if (fixedParams.I.enabled) reducedCount += 1
+    if (fixedParams.V.enabled) reducedCount += 1
+    if (fixedParams.D.enabled) reducedCount += 1
+    return reducedCount
   }
 
   // 更新固定参数配置
@@ -280,9 +296,32 @@ export const ParameterFitting: React.FC = () => {
   const handleSaveParams = useCallback(() => {
     if (!fittingResult) return
 
+    const paramsToSave: Record<string, number> = { ...fittingResult.parameters }
+
+    const fixedBetas = fittingResult.fixed_params ?? {}
+    ;['β3', 'β4', 'β5', 'β6'].forEach((betaKey) => {
+      if (betaKey in fixedBetas && !(betaKey in paramsToSave)) {
+        paramsToSave[betaKey] = 0
+      }
+    })
+
+    const fixedDataValues = fittingResult.fixed_data_values ?? {}
+    if (typeof fixedDataValues.ton === 'number') {
+      paramsToSave.theating = fixedDataValues.ton
+    }
+    if (typeof fixedDataValues.I === 'number') {
+      paramsToSave.I = fixedDataValues.I
+    }
+    if (typeof fixedDataValues.V === 'number') {
+      paramsToSave.V = fixedDataValues.V
+    }
+    if (typeof fixedDataValues.D === 'number') {
+      paramsToSave.D = fixedDataValues.D
+    }
+
     const newSavedParams = {
       ...savedParams,
-      [selectedModel]: fittingResult.parameters,
+      [selectedModel]: paramsToSave,
     }
     setSavedParams(newSavedParams)
     localStorage.setItem(FITTED_PARAMS_KEY, JSON.stringify(newSavedParams))
@@ -590,7 +629,7 @@ export const ParameterFitting: React.FC = () => {
                 固定参数配置 / Fixed Parameters
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                勾选固定参数可减少所需数据点数量（同款器件通常固定: ton, I, V, D）
+                默认拟合全部参数；可按需固定部分参数以减少所需数据点
               </Typography>
               <Grid container spacing={2}>
                 {(['ton', 'I', 'V', 'D'] as const).map((param) => (
@@ -646,7 +685,7 @@ export const ParameterFitting: React.FC = () => {
                 数据要求 / Data Requirements:
               </Typography>
               <Typography variant="body2" component="div">
-                • 当前需要至少 <strong>{getMinDataPoints()}</strong> 组试验数据（已固定 {Object.values(fixedParams).filter(p => p.enabled).length} 个参数）
+                • 当前需要至少 <strong>{getMinDataPoints()}</strong> 组试验数据（已约束/简化 {getReducedParamCount()} 个参数）
               </Typography>
               <Typography variant="body2" component="div">
                 • 主要变量: ΔTj (温度摆幅) 和 Tjmax (最高结温) 应有不同值
@@ -692,7 +731,7 @@ export const ParameterFitting: React.FC = () => {
                       {fittingResult.auto_fixed_info.join(', ')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                      固定参数已合并到 K_eff 中，预测时使用 K_eff 即可
+                      固定参数项已耦合到 K 中，预测时使用当前 K 即可
                     </Typography>
                   </Alert>
                 )}
@@ -712,23 +751,11 @@ export const ParameterFitting: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {/* K_eff - 用于预测的有效K值 */}
-                      {fittingResult.parameters?.K_eff != null && (
-                        <TableRow sx={{ bgcolor: 'success.light' }}>
-                          <TableCell><strong>K_eff</strong></TableCell>
-                          <TableCell><strong>{(fittingResult.parameters.K_eff).toExponential(4)}</strong></TableCell>
-                          <TableCell>
-                            {fittingResult.confidence_intervals?.K_eff && fittingResult.confidence_intervals.K_eff[0] != null && fittingResult.confidence_intervals.K_eff[1] != null
-                              ? `[${(fittingResult.confidence_intervals.K_eff[0] as number).toExponential(2)}, ${(fittingResult.confidence_intervals.K_eff[1] as number).toExponential(2)}]`
-                              : '-'}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {/* K 原始值 */}
+                      {/* K (已耦合固定项) */}
                       {fittingResult.parameters?.K != null && (
-                        <TableRow>
-                          <TableCell>K (原始)</TableCell>
-                          <TableCell>{(fittingResult.parameters.K).toExponential(4)}</TableCell>
+                        <TableRow sx={{ bgcolor: 'success.light' }}>
+                          <TableCell><strong>K</strong></TableCell>
+                          <TableCell><strong>{(fittingResult.parameters.K).toExponential(4)}</strong></TableCell>
                           <TableCell>
                             {fittingResult.confidence_intervals?.K && fittingResult.confidence_intervals.K[0] != null && fittingResult.confidence_intervals.K[1] != null
                               ? `[${(fittingResult.confidence_intervals.K[0] as number).toExponential(2)}, ${(fittingResult.confidence_intervals.K[1] as number).toExponential(2)}]`
@@ -761,10 +788,10 @@ export const ParameterFitting: React.FC = () => {
                 </TableContainer>
 
                 {/* 使用说明 */}
-                {fittingResult.parameters?.K_eff != null && (
+                {fittingResult.parameters?.K != null && (
                   <Alert severity="success" sx={{ mt: 2 }}>
                     <Typography variant="caption">
-                      <strong>使用 K_eff 进行预测:</strong> 在寿命预测页面输入 K_eff 和拟合的 β1、β2 值，
+                      <strong>使用 K 进行预测:</strong> 在寿命预测页面输入 K 和拟合的 β1、β2 值，
                       以及固定的 ton、I、V、D 值即可。
                     </Typography>
                   </Alert>
@@ -787,7 +814,7 @@ export const ParameterFitting: React.FC = () => {
                   需要至少 <strong>{getMinDataPoints()}</strong> 组试验数据
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  当前: {experimentData.length} 组 | 固定参数: {Object.values(fixedParams).filter(p => p.enabled).length} 个
+                  当前: {experimentData.length} 组 | 已约束/简化参数: {getReducedParamCount()} 个
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
                   变量: ΔTj, Tjmax, ton, I, V, D, Nf

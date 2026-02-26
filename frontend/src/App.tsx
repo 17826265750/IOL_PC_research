@@ -6,12 +6,12 @@ import MainLayout from '@/components/Layout/MainLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
   Home,
+  ParameterFitting,
   Prediction,
   Analysis,
   RainflowCounting,
   DamageAccumulation,
-  RemainingLife,
-  ParameterFitting
+  RemainingLife
 } from '@/pages'
 import theme from '@/theme/theme'
 
@@ -32,8 +32,8 @@ function App() {
           <Routes>
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Home />} />
-              <Route path="prediction" element={<Prediction />} />
               <Route path="fitting" element={<ParameterFitting />} />
+              <Route path="prediction" element={<Prediction />} />
               <Route path="rainflow" element={<RainflowCounting />} />
               <Route path="damage" element={<DamageAccumulation />} />
               <Route path="remaining" element={<RemainingLife />} />

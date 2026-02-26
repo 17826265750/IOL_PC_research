@@ -281,11 +281,20 @@ class TestFitCIPS2008Model:
 
         result = fit_cips2008_model(data, fixed_params)
 
-        # Fixed parameters should be in results
-        assert 'β3' in result.parameters
-        assert result.parameters['β3'] == -0.5
+        # Fixed parameters should not be returned in fitted parameter list
+        assert 'β3' not in result.parameters
+        assert 'β4' not in result.parameters
+        assert 'β5' not in result.parameters
+        assert 'β6' not in result.parameters
         assert 'K' in result.parameters
         assert 'β1' in result.parameters
+        assert 'β2' in result.parameters
+
+        assert result.fixed_params is not None
+        assert result.fixed_params['β3'] == -0.5
+        assert result.fixed_params['β4'] == -1.5
+        assert result.fixed_params['β5'] == -1.0
+        assert result.fixed_params['β6'] == -0.3
 
     def test_empty_data_raises_error(self):
         """Test that empty data raises error."""
@@ -311,6 +320,43 @@ class TestFitCIPS2008Model:
 
         with pytest.raises(FittingError, match="Missing required field"):
             fit_cips2008_model(data)
+
+    def test_couple_vd_to_k_success(self):
+        """Test V/D coupling mode for same-product constant V and D."""
+        data = [
+            {'dTj': 70, 'Tj_max': 110, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 3e5},
+            {'dTj': 80, 'Tj_max': 125, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 1.5e5},
+            {'dTj': 90, 'Tj_max': 140, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 8e4},
+            {'dTj': 100, 'Tj_max': 150, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 5e4},
+            {'dTj': 110, 'Tj_max': 160, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 3e4},
+            {'dTj': 120, 'Tj_max': 175, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 2e4},
+            {'dTj': 75, 'Tj_max': 135, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 1.2e5},
+        ]
+
+        result = fit_cips2008_model(data, couple_vd_to_k=True)
+
+        assert 'K' in result.parameters
+        assert 'K_eff' not in result.parameters
+        assert 'β5' not in result.parameters
+        assert 'β6' not in result.parameters
+        assert result.fixed_params is not None
+        assert 'β5' in result.fixed_params
+        assert 'β6' in result.fixed_params
+
+    def test_couple_vd_to_k_requires_constant_vd(self):
+        """Test V/D coupling mode rejects varying V or D."""
+        data = [
+            {'dTj': 80, 'Tj_max': 125, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 1.5e5},
+            {'dTj': 90, 'Tj_max': 140, 't_on': 2.0, 'I': 100, 'V': 1700, 'D': 300, 'Nf': 8e4},
+            {'dTj': 100, 'Tj_max': 150, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 5e4},
+            {'dTj': 110, 'Tj_max': 160, 't_on': 2.0, 'I': 100, 'V': 1700, 'D': 300, 'Nf': 3e4},
+            {'dTj': 120, 'Tj_max': 175, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 2e4},
+            {'dTj': 75, 'Tj_max': 135, 't_on': 2.0, 'I': 100, 'V': 1700, 'D': 300, 'Nf': 1.2e5},
+            {'dTj': 85, 'Tj_max': 145, 't_on': 2.0, 'I': 100, 'V': 1200, 'D': 300, 'Nf': 9e4},
+        ]
+
+        with pytest.raises(FittingError, match="V must be constant"):
+            fit_cips2008_model(data, couple_vd_to_k=True)
 
 
 class TestWeightedFit:

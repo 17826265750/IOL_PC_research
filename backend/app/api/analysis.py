@@ -424,12 +424,13 @@ async def fit_cips_model(request: Request) -> Dict[str, Any]:
     """
     Fit CIPS 2008 model parameters to experimental data.
 
-    Fixed parameters are automatically merged into K_eff for simplified prediction.
-    Constant data columns are auto-detected and their parameters fixed.
+    Default behavior fits all CIPS 2008 parameters.
+    For same-product datasets, V/D effects can be optionally coupled into K_eff.
 
     Request body:
     - experiment_data: List of experiment data points
     - fixed_params: Optional dict of fixed β values (e.g., {'β3': -0.462})
+    - couple_vd_to_k: Optional bool, couple β5/β6 terms into K_eff
 
     Returns:
     - parameters: Dict with K (original), K_eff (for prediction), and all β values
@@ -445,11 +446,19 @@ async def fit_cips_model(request: Request) -> Dict[str, Any]:
         if isinstance(body, list):
             experiment_data = body
             fixed_params = None
+            couple_vd_to_k = False
         else:
             experiment_data = body.get("experiment_data", [])
             fixed_params = body.get("fixed_params")
+            couple_vd_to_k = bool(
+                body.get("couple_vd_to_k", body.get("couple_vd_into_k", False))
+            )
 
-        result = fit_cips2008_model(experiment_data, fixed_params)
+        result = fit_cips2008_model(
+            experiment_data,
+            fixed_params=fixed_params,
+            couple_vd_to_k=couple_vd_to_k,
+        )
 
         response = {
             "parameters": result.parameters,
@@ -464,6 +473,7 @@ async def fit_cips_model(request: Request) -> Dict[str, Any]:
             "fixed_params": getattr(result, 'fixed_params', {}),
             "fixed_data_values": getattr(result, 'fixed_data_values', {}),
             "auto_fixed_info": getattr(result, 'auto_fixed_info', []),
+            "couple_vd_to_k": couple_vd_to_k,
         }
 
         return response

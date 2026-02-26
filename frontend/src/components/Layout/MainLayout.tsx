@@ -40,8 +40,8 @@ interface MenuItemType {
 
 const menuItems: MenuItemType[] = [
   { id: 'home', label: '首页', icon: HomeIcon, path: '/' },
-  { id: 'prediction', label: '寿命预测', icon: PredictionIcon, path: '/prediction' },
   { id: 'fitting', label: '参数拟合', icon: FittingIcon, path: '/fitting' },
+  { id: 'prediction', label: '寿命预测', icon: PredictionIcon, path: '/prediction' },
   { id: 'rainflow', label: '雨流计数', icon: RainflowIcon, path: '/rainflow' },
   { id: 'damage', label: '累计损伤', icon: DamageIcon, path: '/damage' },
   { id: 'remaining', label: '剩余寿命', icon: RemainingLifeIcon, path: '/remaining' },

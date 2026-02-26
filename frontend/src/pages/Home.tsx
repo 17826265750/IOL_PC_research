@@ -93,20 +93,20 @@ const FeatureCard: React.FC<FeatureCardProps> = ({
 export const Home: React.FC = () => {
   const features: FeatureCardProps[] = [
     {
-      title: '寿命预测',
-      description:
-        '使用5种常用寿命模型（Coffin-Manson、Coffin-Manson-Arrhenius、Norris-Landzberg、CIPS 2008、LESIT）进行功率器件寿命预测。',
-      icon: PredictionIcon,
-      path: '/prediction',
-      color: 'primary',
-    },
-    {
       title: '参数拟合',
       description:
         '基于功率循环试验数据，自动拟合各寿命模型的参数，支持数据导入和结果保存。',
       icon: FittingIcon,
       path: '/fitting',
       color: 'secondary',
+    },
+    {
+      title: '寿命预测',
+      description:
+        '使用5种常用寿命模型（Coffin-Manson、Coffin-Manson-Arrhenius、Norris-Landzberg、CIPS 2008、LESIT）进行功率器件寿命预测。',
+      icon: PredictionIcon,
+      path: '/prediction',
+      color: 'primary',
     },
     {
       title: '雨流计数',
@@ -177,11 +177,13 @@ export const Home: React.FC = () => {
             <Typography variant="body2" color="primary.contrastText" sx={{ opacity: 0.9 }}>
               1. 在"数据管理"页面导入实验数据或手动输入温度循环参数
               <br />
-              2. 在"寿命预测"页面选择合适的寿命模型进行预测
+              2. 在"参数拟合"页面拟合模型参数并保存
               <br />
-              3. 在"累计损伤"页面查看Miner累计损伤分析结果
+              3. 在"寿命预测"页面选择合适的寿命模型进行预测
               <br />
-              4. 在"参数分析"页面进行灵敏度分析和参数优化
+              4. 在"累计损伤"页面查看Miner累计损伤分析结果
+              <br />
+              5. 在"参数分析"页面进行灵敏度分析和参数优化
             </Typography>
           </CardContent>
         </Card>

@@ -207,8 +207,24 @@ export const LifetimeCurve: React.FC<LifetimeCurveProps> = ({
     return { mainData, compareData }
   }, [modelType, params, baseParams, selectedParam, compareModels])
 
+  const formatLifetimeValue = (value: number, forLogAxis = false): string => {
+    if (!Number.isFinite(value)) return '--'
+    if (value === 0) return '0'
+
+    const absValue = Math.abs(value)
+
+    if (forLogAxis) {
+      return value.toExponential(1)
+    }
+
+    if (absValue >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+    if (absValue >= 1_000) return `${(value / 1_000).toFixed(1)}k`
+    if (absValue >= 1) return value.toFixed(0)
+    if (absValue >= 0.01) return value.toFixed(2)
+    return value.toExponential(1)
+  }
+
   const getChartOption = () => {
-    const isXAxisLog = scaleType === 'log'
     const isYAxisLog = scaleType === 'log'
 
     const paramLabels: Record<string, { zh: string; en: string }> = {
@@ -266,7 +282,7 @@ export const LifetimeCurve: React.FC<LifetimeCurveProps> = ({
         formatter: (params: any) => {
           let result = `${params[0].value[0].toFixed(2)} ${curveData.mainData.unit}<br/>`
           params.forEach((p: any) => {
-            result += `${p.marker}${p.seriesName}: ${p.value[1].toExponential(2)}<br/>`
+            result += `${p.marker}${p.seriesName}: ${formatLifetimeValue(p.value[1], isYAxisLog)}<br/>`
           })
           return result
         },
@@ -287,11 +303,10 @@ export const LifetimeCurve: React.FC<LifetimeCurveProps> = ({
         name: curveData.mainData.unit,
         nameLocation: 'middle',
         nameGap: 30,
-        scale: isXAxisLog,
-        logBase: 10,
+        scale: true,
         axisLabel: {
           formatter: (value: number) => {
-            if (isXAxisLog && value >= 1000) {
+            if (value >= 1000) {
               return (value / 1000).toFixed(0) + 'k'
             }
             return value.toFixed(0)
@@ -303,17 +318,15 @@ export const LifetimeCurve: React.FC<LifetimeCurveProps> = ({
         },
       },
       yAxis: {
-        type: 'value',
+        type: isYAxisLog ? 'log' : 'value',
         name: '循环次数 Nf / Cycles',
         nameLocation: 'middle',
         nameGap: 60,
-        scale: isYAxisLog,
+        scale: true,
         logBase: 10,
         axisLabel: {
           formatter: (value: number) => {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M'
-            if (value >= 1000) return (value / 1000).toFixed(0) + 'k'
-            return value.toFixed(0)
+            return formatLifetimeValue(value, isYAxisLog)
           },
         },
         splitLine: {

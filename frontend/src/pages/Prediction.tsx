@@ -8,8 +8,6 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Tabs,
-  Tab,
   Stack,
   Chip,
 } from '@mui/material'
@@ -20,6 +18,7 @@ import {
   TrendingUp,
   Save,
   CloudDownload,
+  DeleteSweep,
 } from '@mui/icons-material'
 import { ModelSelector } from '@/components/Prediction/ModelSelector'
 import { ParameterInput } from '@/components/Prediction/ParameterInput'
@@ -29,31 +28,96 @@ import apiService from '@/services/api'
 import type { LifetimeModelType, LifetimeModelParams, PredictionResult, ExportFormat } from '@/types'
 
 const FITTED_PARAMS_KEY = 'cips_fitted_parameters'
+const PREDICTION_MODEL_KEY = 'prediction_model_type'
+const PREDICTION_PARAMS_KEY = 'prediction_params'
+const PREDICTION_RESULT_KEY = 'prediction_result'
+const PREDICTION_USING_FITTED_KEY = 'prediction_using_fitted'
+const PREDICTION_STORAGE_KEYS = [
+  PREDICTION_MODEL_KEY,
+  PREDICTION_PARAMS_KEY,
+  PREDICTION_RESULT_KEY,
+  PREDICTION_USING_FITTED_KEY,
+]
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box>{children}</Box>}
-    </div>
-  )
+const safeParse = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
 }
 
 export const Prediction: React.FC = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const [modelType, setModelType] = useState<LifetimeModelType>('cips2008')
-  const [params, setParams] = useState<Record<string, number>>({})
-  const [result, setResult] = useState<PredictionResult | null>(null)
+  const [modelType, setModelType] = useState<LifetimeModelType>(() => {
+    const saved = localStorage.getItem(PREDICTION_MODEL_KEY)
+    return (saved as LifetimeModelType) || 'cips2008'
+  })
+  const [params, setParams] = useState<Record<string, number>>(() =>
+    safeParse<Record<string, number>>(localStorage.getItem(PREDICTION_PARAMS_KEY), {})
+  )
+  const [result, setResult] = useState<PredictionResult | null>(() =>
+    safeParse<PredictionResult | null>(localStorage.getItem(PREDICTION_RESULT_KEY), null)
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [currentTab, setCurrentTab] = useState(0)
-  const [usingFittedParams, setUsingFittedParams] = useState(false)
+  const [usingFittedParams, setUsingFittedParams] = useState<boolean>(() =>
+    localStorage.getItem(PREDICTION_USING_FITTED_KEY) === 'true'
+  )
+
+  useEffect(() => {
+    localStorage.setItem(PREDICTION_MODEL_KEY, modelType)
+  }, [modelType])
+
+  useEffect(() => {
+    localStorage.setItem(PREDICTION_PARAMS_KEY, JSON.stringify(params))
+  }, [params])
+
+  useEffect(() => {
+    if (result) {
+      localStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify(result))
+    } else {
+      localStorage.removeItem(PREDICTION_RESULT_KEY)
+    }
+  }, [result])
+
+  useEffect(() => {
+    localStorage.setItem(PREDICTION_USING_FITTED_KEY, String(usingFittedParams))
+  }, [usingFittedParams])
+
+  const normalizeImportedParams = useCallback((rawParams: Record<string, unknown>): Record<string, number> => {
+    const convertedParams: Record<string, number> = {}
+
+    for (const [key, value] of Object.entries(rawParams)) {
+      const numericValue = typeof value === 'number' ? value : Number(value)
+      if (!Number.isFinite(numericValue)) continue
+
+      const mappedKey = key
+        .replace('β', 'beta')
+        .replace('ton', 'theating')
+
+      convertedParams[mappedKey] = numericValue
+    }
+
+    // Simplified CIPS model fallback:
+    // if fitted K is imported but beta3~beta6 are absent, treat those fixed terms as coupled into K.
+    if (
+      'K' in convertedParams &&
+      !('beta3' in convertedParams) &&
+      !('beta4' in convertedParams) &&
+      !('beta5' in convertedParams) &&
+      !('beta6' in convertedParams)
+    ) {
+      convertedParams.beta3 = 0
+      convertedParams.beta4 = 0
+      convertedParams.beta5 = 0
+      convertedParams.beta6 = 0
+    }
+
+    return convertedParams
+  }, [])
 
   // Load fitted params for current model
   const handleLoadFittedParams = useCallback((modelToLoad?: LifetimeModelType | React.MouseEvent) => {
@@ -63,20 +127,22 @@ export const Prediction: React.FC = () => {
       const allParams = JSON.parse(saved)
       const fittedParams = allParams[targetModel]
       if (fittedParams) {
-        // Convert Greek letter param names to English (β1 -> beta1)
-        const convertedParams: Record<string, number> = {}
-        for (const [key, value] of Object.entries(fittedParams as Record<string, unknown>)) {
-          const newKey = key.replace('β', 'beta')
-          convertedParams[newKey] = typeof value === 'number' ? value : 0
-        }
+        const convertedParams = normalizeImportedParams(fittedParams as Record<string, unknown>)
+
         if (typeof modelToLoad === 'string' && modelToLoad !== modelType) {
           setModelType(modelToLoad)
+          setTimeout(() => {
+            setParams(prev => ({ ...prev, ...convertedParams }))
+            setUsingFittedParams(true)
+          }, 0)
+          return
         }
+
         setParams(prev => ({ ...prev, ...convertedParams }))
         setUsingFittedParams(true)
       }
     }
-  }, [modelType])
+  }, [modelType, normalizeImportedParams])
 
   // Handle navigation state
   useEffect(() => {
@@ -93,12 +159,7 @@ export const Prediction: React.FC = () => {
     const handleLoadFittedParamsEvent = (event: CustomEvent) => {
       const { model, params: fittedParams } = event.detail
       if (model === modelType) {
-        // Convert Greek letter param names to English (β1 -> beta1)
-        const convertedParams: Record<string, number> = {}
-        for (const [key, value] of Object.entries(fittedParams as Record<string, unknown>)) {
-          const newKey = key.replace('β', 'beta')
-          convertedParams[newKey] = typeof value === 'number' ? value : 0
-        }
+        const convertedParams = normalizeImportedParams(fittedParams as Record<string, unknown>)
         setParams(prev => ({ ...prev, ...convertedParams }))
         setUsingFittedParams(true)
       }
@@ -108,7 +169,7 @@ export const Prediction: React.FC = () => {
     return () => {
       window.removeEventListener('loadFittedParams', handleLoadFittedParamsEvent as EventListener)
     }
-  }, [modelType])
+  }, [modelType, normalizeImportedParams])
 
   const handleModelChange = useCallback((model: LifetimeModelType) => {
     setModelType(model)
@@ -147,7 +208,6 @@ export const Prediction: React.FC = () => {
 
       if (response.success && response.data) {
         setResult(response.data as PredictionResult)
-        setCurrentTab(1)
       } else {
         setError(response.error || '预测失败 / Prediction failed')
       }
@@ -162,7 +222,15 @@ export const Prediction: React.FC = () => {
     setParams({})
     setResult(null)
     setError(null)
-    setCurrentTab(0)
+  }, [])
+
+  const handleClearCache = useCallback(() => {
+    PREDICTION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key))
+    setModelType('cips2008')
+    setParams({})
+    setResult(null)
+    setError(null)
+    setUsingFittedParams(false)
   }, [])
 
   const handleExport = useCallback(async (format: ExportFormat) => {
@@ -253,6 +321,17 @@ export const Prediction: React.FC = () => {
                 >
                   加载拟合参数 / Load Fitted Params
                 </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteSweep />}
+                  onClick={handleClearCache}
+                  disabled={loading}
+                  size="small"
+                >
+                  清空预测缓存 / Clear Cache
+                </Button>
                 {usingFittedParams && (
                   <Chip
                     label="使用拟合参数"
@@ -287,31 +366,25 @@ export const Prediction: React.FC = () => {
         {/* Right Panel - Results */}
         <Grid item xs={12} lg={8}>
           <Paper sx={{ p: 2, minHeight: 600 }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-              <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
-                <Tab label="结果 / Results" />
-                <Tab label="曲线分析 / Curves" disabled={!result} />
-              </Tabs>
-            </Box>
+            <ResultDisplay
+              result={result}
+              loading={loading}
+              error={error}
+              onExport={handleExport}
+            />
 
-            <TabPanel value={currentTab} index={0}>
-              <ResultDisplay
-                result={result}
-                loading={loading}
-                error={error}
-                onExport={handleExport}
-              />
-            </TabPanel>
-
-            <TabPanel value={currentTab} index={1}>
-              {result && (
+            {result && (
+              <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Typography variant="h6" gutterBottom>
+                  曲线分析 / Curves
+                </Typography>
                 <LifetimeCurve
                   modelType={modelType}
                   params={params as unknown as LifetimeModelParams}
                   baseParams={params}
                 />
-              )}
-            </TabPanel>
+              </Box>
+            )}
           </Paper>
         </Grid>
       </Grid>
