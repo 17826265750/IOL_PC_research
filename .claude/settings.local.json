@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"D:/项目/IOL_PC_research/backend/requirements.txt\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/run.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/__init__.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/config.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/main.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/db/__init__.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/db/database.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/models/__init__.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/models/prediction.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/models/experiment.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/models/parameters.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/models/mission_profile.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/schemas/__init__.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/schemas/prediction.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/schemas/experiment.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/schemas/damage.py\":*)",
+      "Bash(\"D:/项目/IOL_PC_research/backend/app/core/__init__.py\":*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(npx playwright screenshot:*)",
+      "Bash(npm run build)",
+      "Bash(ping:*)",
+      "Bash(python:*)"
+    ]
+  }
+}
