@@ -11,7 +11,7 @@ Provides endpoints for:
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 import numpy as np
 import logging
 

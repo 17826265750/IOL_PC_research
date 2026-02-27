@@ -14,11 +14,7 @@ from datetime import datetime
 import logging
 
 from app.core.models.model_factory import ModelFactory
-from app.core.rainflow import rainflow_counting, find_peaks_and_valleys
-from app.core.damage_accumulation import calculate_miner_damage
-from app.core.weibull import fit_weibull
-from app.core.fitting import fit_lifetime_model
-from app.core.sensitivity import single_parameter_sensitivity, tornado_analysis, sobol_sensitivity
+from app.core.sensitivity import tornado_analysis
 from app.db.database import get_db
 from app.db.crud import CRUDBase
 from app.models.prediction import Prediction

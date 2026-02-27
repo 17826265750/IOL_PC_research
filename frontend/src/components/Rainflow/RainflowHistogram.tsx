@@ -35,7 +35,11 @@ export const RainflowHistogram: React.FC<Props> = ({ cycles, binCount = 20 }) =>
     const ranges = cycles.map((c) => c.range)
     const minRange = Math.min(...ranges)
     const maxRange = Math.max(...ranges)
-    const binWidth = (maxRange - minRange) / binCount
+    const span = maxRange - minRange
+    const safeSpan = span > 0 ? span : Math.max(1, Math.abs(maxRange) * 0.1)
+    const lower = minRange - safeSpan * 0.01
+    const upper = maxRange + safeSpan * 0.01
+    const binWidth = (upper - lower) / binCount
 
     // Initialize bins
     const bins: string[] = []
@@ -43,13 +47,13 @@ export const RainflowHistogram: React.FC<Props> = ({ cycles, binCount = 20 }) =>
     const cumulative: number[] = []
 
     for (let i = 0; i < binCount; i++) {
-      const binStart = minRange + i * binWidth
+      const binStart = lower + i * binWidth
       const binEnd = binStart + binWidth
       bins.push(`${binStart.toFixed(1)}-${binEnd.toFixed(1)}`)
 
       // Count cycles in this bin
       const binCountValue = cycles
-        .filter((c) => c.range >= binStart && c.range < binEnd)
+        .filter((c) => c.range >= binStart && (i === binCount - 1 ? c.range <= binEnd : c.range < binEnd))
         .reduce((sum, c) => sum + c.count, 0)
 
       counts.push(binCountValue)

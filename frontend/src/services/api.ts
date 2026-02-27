@@ -267,7 +267,175 @@ class ApiService {
     timeSeries: number[]
     binCount?: number
   }) {
-    return this.post('/rainflow/count', data)
+    const payload = {
+      data_points: data.timeSeries.map((value, index) => ({ time: index, value })),
+      bin_count: data.binCount ?? 20,
+      method: 'ASTM',
+    }
+
+    try {
+      const response = await this.client.post('/rainflow/count', payload, {
+        signal: this.getAbortSignal(),
+      })
+
+      const backendData = response.data as {
+        cycles?: Array<{ stress_range: number; mean_value: number; cycles: number }>
+        total_cycles?: number
+        max_range?: number
+        summary?: Record<string, unknown>
+      }
+
+      const cycles = (backendData.cycles ?? []).map((cycle) => ({
+        range: cycle.stress_range,
+        mean: cycle.mean_value,
+        count: cycle.cycles,
+        cycleType: cycle.cycles >= 1 ? 'full' : 'half',
+      }))
+
+      const result = {
+        originalData: data.timeSeries,
+        cycles,
+        totalCycles: backendData.total_cycles ?? 0,
+        maxRange: backendData.max_range ?? 0,
+        minRange: cycles.length > 0 ? Math.min(...cycles.map((c) => c.range)) : 0,
+        binCount: data.binCount ?? 20,
+        summary: backendData.summary ?? {},
+      }
+
+      return {
+        success: true,
+        data: result,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '雨流计数请求失败'
+      return {
+        success: false,
+        error: message,
+      }
+    }
+  }
+
+  /**
+   * Run one-stop rainflow pipeline
+   */
+  async runRainflowPipeline(data: {
+    junctionTemperature?: number[]
+    powerCurve?: number[]
+    thermalImpedanceCurve?: number[]
+    fosterParams?: Array<{ R: number; tau: number }>
+    // Multi-source
+    powerCurves?: number[][]
+    zthMatrix?: Array<Array<Array<{ R: number; tau: number }>>>
+    sourceNames?: string[]
+    targetNode?: number
+    // Common
+    ambientTemperature?: number
+    responseType?: 'impulse' | 'step'
+    dt?: number
+    binCount?: number
+    rearrange?: boolean
+    nBand?: number
+    yMin?: number
+    yMax?: number
+    ignoreBelow?: number
+    // Damage: life curve
+    lifeCurve?: Array<{ deltaTj: number; nf: number }>
+    referenceDeltaTj?: number
+    // Damage: lifetime model
+    lifetimeModel?: string
+    modelParams?: Record<string, number>
+    safetyFactor?: number
+  }) {
+    const payload: Record<string, unknown> = {
+      junction_temperature: data.junctionTemperature,
+      power_curve: data.powerCurve,
+      thermal_impedance_curve: data.thermalImpedanceCurve,
+      foster_params: data.fosterParams?.map((e) => ({ R: e.R, tau: e.tau })),
+      // multi-source
+      power_curves: data.powerCurves,
+      zth_matrix: data.zthMatrix?.map((row) =>
+        row.map((cell) => cell.map((e) => ({ R: e.R, tau: e.tau }))),
+      ),
+      source_names: data.sourceNames,
+      target_node: data.targetNode,
+      // common
+      ambient_temperature: data.ambientTemperature ?? 25,
+      response_type: data.responseType ?? 'impulse',
+      dt: data.dt ?? 1.0,
+      bin_count: data.binCount ?? 20,
+      rearrange: data.rearrange ?? false,
+      n_band: data.nBand ?? 20,
+      y_min: data.yMin,
+      y_max: data.yMax,
+      ignore_below: data.ignoreBelow ?? 0,
+      // damage: life curve
+      life_curve: data.lifeCurve?.map((item) => ({
+        delta_tj: item.deltaTj,
+        nf: item.nf,
+      })),
+      reference_delta_tj: data.referenceDeltaTj,
+      // damage: model
+      lifetime_model: data.lifetimeModel,
+      model_params: data.modelParams,
+      safety_factor: data.safetyFactor,
+    }
+
+    // Remove undefined keys to keep payload clean
+    Object.keys(payload).forEach((k) => {
+      if (payload[k] === undefined) delete payload[k]
+    })
+
+    try {
+      const response = await this.client.post('/rainflow/pipeline', payload, {
+        signal: this.getAbortSignal(),
+      })
+
+      const backendData = response.data as {
+        junction_temperature: number[]
+        thermal_summary?: Record<string, number>
+        cycles?: Array<{ stress_range: number; mean_value: number; cycles: number }>
+        matrix_rows?: Array<{ delta_tj: number; mean_tj: number; count: number }>
+        total_cycles?: number
+        max_range?: number
+        summary?: Record<string, unknown>
+        damage?: Record<string, unknown> | null
+        from_to_matrix?: Record<string, unknown> | null
+        amplitude_histogram?: Record<string, unknown> | null
+        residual?: number[] | null
+        all_junction_temperatures?: Record<string, number[]> | null
+        model_damage?: Record<string, unknown> | null
+      }
+
+      const cycles = (backendData.cycles ?? []).map((cycle) => ({
+        range: cycle.stress_range,
+        mean: cycle.mean_value,
+        count: cycle.cycles,
+        cycleType: cycle.cycles >= 1 ? 'full' : 'half',
+      }))
+
+      const result = {
+        originalData: backendData.junction_temperature ?? data.junctionTemperature ?? [],
+        cycles,
+        totalCycles: backendData.total_cycles ?? 0,
+        maxRange: backendData.max_range ?? 0,
+        minRange: cycles.length > 0 ? Math.min(...cycles.map((c) => c.range)) : 0,
+        binCount: data.binCount ?? 20,
+        summary: backendData.summary ?? {},
+        matrixRows: backendData.matrix_rows ?? [],
+        damage: backendData.damage ?? null,
+        thermalSummary: backendData.thermal_summary ?? null,
+        fromToMatrix: (backendData.from_to_matrix as any) ?? null,
+        amplitudeHistogram: (backendData.amplitude_histogram as any) ?? null,
+        residual: backendData.residual ?? null,
+        allJunctionTemperatures: backendData.all_junction_temperatures ?? null,
+        modelDamage: (backendData.model_damage as any) ?? null,
+      }
+
+      return { success: true, data: result }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '雨流pipeline请求失败'
+      return { success: false, error: message }
+    }
   }
 
   /**

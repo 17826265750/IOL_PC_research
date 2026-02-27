@@ -6,7 +6,7 @@ partial safety factors, and design adequacy assessment.
 """
 import pytest
 import numpy as np
-from backend.app.core.safety_margin import (
+from app.core.safety_margin import (
     SafetyMarginResult,
     SafetyMarginDistribution,
     calculate_safety_margin,

@@ -83,6 +83,13 @@ interface FixedParamConfig {
   D: { enabled: boolean; value: number }
 }
 
+const FIXED_PARAM_TO_FIELD: Record<keyof FixedParamConfig, keyof ExperimentDataRow> = {
+  ton: 'ton',
+  I: 'I',
+  V: 'V',
+  D: 'D',
+}
+
 export const ParameterFitting: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<LifetimeModelType>(() => {
     const saved = localStorage.getItem(SELECTED_MODEL_KEY)
@@ -161,6 +168,30 @@ export const ParameterFitting: React.FC = () => {
 
   React.useEffect(() => {
     localStorage.setItem(FIXED_PARAMS_KEY, JSON.stringify(fixedParams))
+  }, [fixedParams])
+
+  // 当固定参数启用或值变化时，同步覆盖试验数据对应列，保持列内常值
+  React.useEffect(() => {
+    setExperimentData((prev) => {
+      let changed = false
+      const next = prev.map((row) => {
+        const updated: ExperimentDataRow = { ...row }
+
+        ;(['ton', 'I', 'V', 'D'] as const).forEach((param) => {
+          if (!fixedParams[param].enabled) return
+          const field = FIXED_PARAM_TO_FIELD[param]
+          const fixedValue = fixedParams[param].value
+          if (updated[field] !== fixedValue) {
+            updated[field] = fixedValue
+            changed = true
+          }
+        })
+
+        return updated
+      })
+
+      return changed ? next : prev
+    })
   }, [fixedParams])
 
   React.useEffect(() => {
@@ -368,12 +399,19 @@ export const ParameterFitting: React.FC = () => {
       }
 
       if (newData.length > 0) {
-        setExperimentData(newData)
+        const syncedData = newData.map((row) => ({
+          ...row,
+          ton: fixedParams.ton.enabled ? fixedParams.ton.value : row.ton,
+          I: fixedParams.I.enabled ? fixedParams.I.value : row.I,
+          V: fixedParams.V.enabled ? fixedParams.V.value : row.V,
+          D: fixedParams.D.enabled ? fixedParams.D.value : row.D,
+        }))
+        setExperimentData(syncedData)
       }
     }
     reader.readAsText(file)
     event.target.value = ''
-  }, [])
+  }, [fixedParams])
 
   const getScatterOption = () => {
     if (!fittingResult || !fittingResult.parameters) return {}
@@ -561,8 +599,9 @@ export const ParameterFitting: React.FC = () => {
                         <TextField
                           size="small"
                           type="number"
-                          value={row.ton}
+                          value={fixedParams.ton.enabled ? fixedParams.ton.value : row.ton}
                           onChange={(e) => updateDataRow(row.id, 'ton', parseFloat(e.target.value) || 0)}
+                          disabled={fixedParams.ton.enabled}
                           sx={{ width: 70 }}
                         />
                       </TableCell>
@@ -570,8 +609,9 @@ export const ParameterFitting: React.FC = () => {
                         <TextField
                           size="small"
                           type="number"
-                          value={row.I}
+                          value={fixedParams.I.enabled ? fixedParams.I.value : row.I}
                           onChange={(e) => updateDataRow(row.id, 'I', parseFloat(e.target.value) || 0)}
+                          disabled={fixedParams.I.enabled}
                           sx={{ width: 80 }}
                         />
                       </TableCell>
@@ -579,8 +619,9 @@ export const ParameterFitting: React.FC = () => {
                         <TextField
                           size="small"
                           type="number"
-                          value={row.V}
+                          value={fixedParams.V.enabled ? fixedParams.V.value : row.V}
                           onChange={(e) => updateDataRow(row.id, 'V', parseFloat(e.target.value) || 0)}
+                          disabled={fixedParams.V.enabled}
                           sx={{ width: 90 }}
                         />
                       </TableCell>
@@ -588,8 +629,9 @@ export const ParameterFitting: React.FC = () => {
                         <TextField
                           size="small"
                           type="number"
-                          value={row.D}
+                          value={fixedParams.D.enabled ? fixedParams.D.value : row.D}
                           onChange={(e) => updateDataRow(row.id, 'D', parseFloat(e.target.value) || 0)}
+                          disabled={fixedParams.D.enabled}
                           sx={{ width: 80 }}
                         />
                       </TableCell>

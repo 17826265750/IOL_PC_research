@@ -6,7 +6,7 @@ remaining life estimation, and statistical analysis.
 """
 import pytest
 import numpy as np
-from backend.app.core.remaining_life import (
+from app.core.remaining_life import (
     RemainingLifeResult,
     DegradationPoint,
     assess_remaining_life,

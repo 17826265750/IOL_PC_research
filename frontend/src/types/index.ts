@@ -271,8 +271,8 @@ export interface RainflowCycle {
   mean: number
   /** Number of cycles at this range and mean */
   count: number
-  /** Cycle type: reversal or peak */
-  type: 'reversal' | 'peak'
+  /** Cycle type: full or half */
+  cycleType?: 'full' | 'half'
 }
 
 /**
@@ -291,6 +291,54 @@ export interface RainflowResult {
   minRange: number
   /** Number of bins used for histogram */
   binCount?: number
+  /** Backend summary statistics */
+  summary?: Record<string, unknown>
+  /** Aggregated matrix rows from pipeline */
+  matrixRows?: Array<{ delta_tj: number; mean_tj: number; count: number }>
+  /** Optional Miner damage output */
+  damage?: Record<string, unknown> | null
+  /** Thermal design summary (Tj_max, Tj_min, …) */
+  thermalSummary?: {
+    tj_max: number
+    tj_min: number
+    tj_mean: number
+    tj_range: number
+    delta_tj_max: number
+  } | null
+  /** From-To transition matrix */
+  fromToMatrix?: {
+    matrix: number[][]
+    band_values: number[]
+    n_band: number
+    y_min: number
+    y_max: number
+  } | null
+  /** Amplitude distribution histogram */
+  amplitudeHistogram?: {
+    bin_centers: number[]
+    counts_full: number[]
+    counts_half: number[]
+    counts_total: number[]
+    bin_edges: number[]
+  } | null
+  /** Residual reversal points */
+  residual?: number[] | null
+  /** Multi-source: Tj series per node  {'IGBT': [...], 'Diode': [...]} */
+  allJunctionTemperatures?: Record<string, number[]> | null
+  /** Model-based CDI result with per-cycle details */
+  modelDamage?: {
+    total_damage_per_block: number
+    blocks_to_failure: number | null
+    safety_factor: number
+    model_used: string
+    cycle_details: Array<{
+      delta_tj: number
+      mean_tj: number
+      count: number
+      nf: number
+      damage: number
+    }>
+  } | null
 }
 
 // ============================================

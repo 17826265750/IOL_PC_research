@@ -122,18 +122,22 @@ class TestRainflowCounting:
         result = rainflow_counting([50, 50, 50, 50])
 
         assert result.cycles == []
-        assert result.residual == [50, 50] or len(result.residual) <= 2
+        # All-constant data is returned as-is in the residual
+        assert all(v == 50 for v in result.residual)
 
     def test_simple_triangle_wave(self):
-        """Test with simple triangle wave (0 -> 100 -> 0)."""
+        """Test with simple triangle wave (0 -> 100 -> 0).
+
+        Per ASTM E1049 §5.4.4, the closed range Y contains the
+        starting point, so it is counted as a *half-cycle*.
+        """
         data = [0, 100, 0]
 
         result = rainflow_counting(data)
 
-        # Should count one full cycle
         assert len(result.cycles) == 1
         assert result.cycles[0].range == 100
-        assert result.cycles[0].count == 1.0
+        assert result.cycles[0].count == 0.5  # half-cycle (contains start)
 
     def test_astm_standard_example(self):
         """Test with ASTM E1049 standard example.
@@ -164,9 +168,10 @@ class TestRainflowCounting:
         # Should detect multiple cycles
         assert len(result.cycles) >= 2
 
-        # Total count should account for all cycles
+        # Total count — cycles that include the starting reversal
+        # are half-cycles per ASTM E1049.
         total_count = sum(c.count for c in result.cycles)
-        assert total_count >= 2
+        assert total_count >= 1.5
 
     def test_cycle_properties(self):
         """Test that cycle properties are correctly calculated."""

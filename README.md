@@ -26,7 +26,7 @@
 - 📈 **Weibull分析**: B10/B50/B63.2寿命计算
 - 🎯 **敏感性分析**: 龙卷风图、热力图
 - 📑 **报告导出**: PDF/Excel专业报告
-- 🧪 **353个单元测试**: 全面覆盖核心算法
+- 🧪 **555个单元测试**: 全面覆盖核心算法
 
 ---
 
@@ -158,15 +158,27 @@ http://localhost:8000/api
 | POST | `/prediction/calculate` | 单模型寿命预测 |
 | POST | `/prediction/compare` | 多模型对比 |
 | POST | `/prediction/sensitivity` | 敏感性分析 |
-| GET | `/prediction/models` | 可用模型列表 |
+| POST | `/prediction/predict` | 预测（简化接口） |
+| GET | `/prediction` | 预测历史列表 |
+| GET | `/prediction/{id}` | 获取单条预测 |
+| POST | `/prediction` | 创建预测记录 |
+| PUT | `/prediction/{id}` | 更新预测记录 |
+| DELETE | `/prediction/{id}` | 删除预测记录 |
+| GET | `/prediction/models/available` | 可用模型列表 |
+| GET | `/prediction/models/{name}` | 模型详情 |
 
 #### 雨流计数
 
 | 方法 | 端点 | 描述 |
 |------|------|------|
 | POST | `/rainflow/count` | 雨流循环提取 |
-| POST | `/rainflow/matrix` | 循环矩阵生成 |
 | POST | `/rainflow/histogram` | 直方图数据 |
+| POST | `/rainflow/matrix` | 循环矩阵生成 |
+| POST | `/rainflow/equivalent` | 等效恒幅计算 |
+| POST | `/rainflow/cumulative` | 累积循环数 |
+| POST | `/rainflow/peaks` | 峰谷点提取 |
+| POST | `/rainflow/analyze` | 综合分析 |
+| POST | `/rainflow/pipeline` | 完整处理流水线 |
 
 #### 损伤分析
 
@@ -174,23 +186,69 @@ http://localhost:8000/api
 |------|------|------|
 | POST | `/damage/calculate` | Miner损伤计算 |
 | POST | `/damage/remaining-life` | 剩余寿命评估 |
+| POST | `/damage/rate` | 损伤率计算 |
+| POST | `/damage/confidence` | 置信区间计算 |
+| POST | `/damage/combine` | 损伤组合 |
+| POST | `/damage/time-to-failure` | 失效时间预测 |
+| POST | `/damage/sequence-adjustment` | 序列调整 |
+| POST | `/damage/lifetime-from-model` | 从模型计算寿命 |
 | POST | `/damage/safety-margin/calculate` | 安全裕度计算 |
+| POST | `/damage/safety-margin/statistical` | 统计安全裕度 |
+| POST | `/damage/safety-margin/required-factor` | 所需安全系数 |
+| POST | `/damage/lifetime-curve/generate` | 寿命曲线生成 |
+| POST | `/damage/remaining-life/evaluate` | 剩余寿命评估 |
 
-#### Weibull分析
+#### Weibull分析与参数拟合
 
 | 方法 | 端点 | 描述 |
 |------|------|------|
 | POST | `/analysis/weibull/fit` | Weibull拟合 |
 | POST | `/analysis/weibull/b-life` | B寿命计算 |
+| POST | `/analysis/weibull/reliability` | 可靠度计算 |
+| POST | `/analysis/weibull/hazard-rate` | 失效率计算 |
 | POST | `/analysis/weibull/probability-plot` | 概率图数据 |
+| POST | `/analysis/weibull/curve` | Weibull曲线 |
+| POST | `/analysis/fitting/fit-model` | 通用模型拟合 |
+| POST | `/analysis/fitting/cips2008` | CIPS 2008专用拟合 |
+| POST | `/analysis/acceleration-factor` | 加速因子计算 |
+| POST | `/analysis/acceleration-factor/convert` | 加速因子转换 |
+| POST | `/analysis/analyze` | 综合分析 |
+
+#### 实验数据管理
+
+| 方法 | 端点 | 描述 |
+|------|------|------|
+| GET | `/experiments` | 实验列表 |
+| GET | `/experiments/{id}` | 获取单条实验 |
+| POST | `/experiments` | 创建实验记录 |
+| PUT | `/experiments/{id}` | 更新实验记录 |
+| DELETE | `/experiments/{id}` | 删除实验记录 |
+| GET | `/experiments/stats/summary` | 实验统计摘要 |
+| GET | `/experiments/stats/by-temperature` | 按温度统计 |
+| GET | `/experiments/by/temperature/{min}/{max}` | 按温度范围查询 |
+| POST | `/experiments/import/csv` | CSV导入实验数据 |
+| GET | `/experiments/{id}/export` | 导出实验数据 |
+| POST | `/experiments/{id}/calculate-mttf` | 计算MTTF |
 
 #### 数据导出
 
 | 方法 | 端点 | 描述 |
 |------|------|------|
 | POST | `/export/csv/predictions` | 预测结果CSV |
-| POST | `/export/report/lifetime-prediction` | PDF报告 |
-| POST | `/export/excel/data` | Excel导出 |
+| POST | `/export/csv/experiments` | 实验数据CSV |
+| POST | `/export/csv/rainflow` | 雨流数据CSV |
+| POST | `/export/json/data` | JSON数据导出 |
+| POST | `/export/json/prediction-report` | JSON预测报告 |
+| POST | `/export/excel/data` | Excel数据导出 |
+| POST | `/export/report/pdf` | PDF报告生成 |
+| GET | `/export/prediction/{id}/pdf` | 预测PDF报告 |
+| GET | `/export/experiment/{id}/pdf` | 实验PDF报告 |
+| POST | `/export/report/excel` | Excel报告 |
+| GET | `/export/prediction/{id}/excel` | 预测Excel报告 |
+| POST | `/export/report/lifetime-prediction` | 寿命预测报告 |
+| POST | `/export/report/experiment-summary` | 实验摘要报告 |
+| POST | `/export/batch/export-multiple` | 批量导出 |
+| GET | `/export/templates/{name}` | 报告模板 |
 
 ### 示例请求
 
@@ -242,11 +300,15 @@ IOL_PC_research/
 │   │   │   ├── models/        # 寿命模型
 │   │   │   │   ├── cips_2008.py
 │   │   │   │   ├── coffin_manson.py
+│   │   │   │   ├── coffin_manson_arrhenius.py
 │   │   │   │   ├── norris_landzberg.py
 │   │   │   │   ├── lesit.py
+│   │   │   │   ├── model_base.py
 │   │   │   │   └── model_factory.py
 │   │   │   ├── rainflow.py    # 雨流计数
 │   │   │   ├── damage_accumulation.py
+│   │   │   ├── remaining_life.py
+│   │   │   ├── safety_margin.py
 │   │   │   ├── weibull.py
 │   │   │   ├── sensitivity.py
 │   │   │   ├── fitting.py
@@ -254,23 +316,41 @@ IOL_PC_research/
 │   │   │       ├── pdf_generator.py
 │   │   │       └── excel_generator.py
 │   │   ├── api/               # API端点
+│   │   │   ├── prediction.py  # 寿命预测API
+│   │   │   ├── rainflow.py    # 雨流计数API
+│   │   │   ├── damage.py      # 损伤分析API
+│   │   │   ├── analysis.py    # Weibull分析API
+│   │   │   ├── experiments.py # 实验数据API
+│   │   │   └── export.py      # 数据导出API
 │   │   ├── models/            # SQLAlchemy模型
 │   │   ├── schemas/           # Pydantic模式
 │   │   └── db/                # 数据库
-│   ├── tests/                 # 单元测试 (353用例)
+│   ├── tests/                 # 单元测试 (555用例)
+│   │   ├── test_models/       # 寿命模型测试
+│   │   ├── test_core/         # 核心算法测试
+│   │   ├── test_api/          # API测试
+│   │   └── core/              # 更多核心测试
 │   ├── requirements.txt
 │   └── run.py
 │
 ├── frontend/                   # React前端
 │   ├── src/
 │   │   ├── components/        # React组件
-│   │   │   ├── Prediction/
-│   │   │   ├── Rainflow/
-│   │   │   ├── DamageAccumulation/
-│   │   │   ├── RemainingLife/
-│   │   │   ├── Visualization/
-│   │   │   └── ErrorBoundary/
+│   │   │   ├── Prediction/    # 寿命预测组件
+│   │   │   ├── Rainflow/      # 雨流计数组件
+│   │   │   ├── DamageAccumulation/  # 损伤累积组件
+│   │   │   ├── RemainingLife/ # 剩余寿命组件
+│   │   │   ├── Visualization/ # 可视化组件
+│   │   │   ├── Layout/        # 布局组件
+│   │   │   └── ErrorBoundary/ # 错误边界
 │   │   ├── pages/             # 页面
+│   │   │   ├── Home.tsx
+│   │   │   ├── Prediction.tsx
+│   │   │   ├── RainflowCounting.tsx
+│   │   │   ├── DamageAccumulation.tsx
+│   │   │   ├── Analysis.tsx
+│   │   │   ├── ParameterFitting.tsx
+│   │   │   └── RemainingLife.tsx
 │   │   ├── services/          # API服务
 │   │   ├── stores/            # Zustand状态
 │   │   └── types/             # TypeScript类型
@@ -304,13 +384,15 @@ pytest tests/ --cov=app --cov-report=html
 
 | 模块 | 测试文件 | 用例数 |
 |------|----------|--------|
-| 雨流计数 | `test_rainflow.py` | 45 |
-| 损伤累积 | `test_damage_accumulation.py` | 38 |
-| Weibull | `test_weibull.py` | 52 |
-| 敏感性 | `test_sensitivity.py` | 65 |
-| 参数拟合 | `test_fitting.py` | 48 |
-| 其他 | - | 105 |
-| **总计** | - | **353** |
+| 雨流计数 | `test_rainflow.py` + `test_core/test_rainflow.py` + `test_api/test_rainflow_api.py` | 120+ |
+| 损伤累积 | `test_damage_accumulation.py` + `test_core/test_damage_accumulation.py` | 90+ |
+| 寿命模型 | `test_models/` (5个模型) | 80+ |
+| Weibull | `test_core/test_weibull.py` | 52 |
+| 敏感性 | `test_core/test_sensitivity.py` | 65 |
+| 参数拟合 | `test_core/test_fitting.py` | 48 |
+| 剩余寿命 | `test_remaining_life.py` | 50+ |
+| 安全裕度 | `test_safety_margin.py` | 50+ |
+| **总计** | - | **555** |
 
 ---
 

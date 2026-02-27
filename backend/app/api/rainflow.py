@@ -17,11 +17,18 @@ from app.core.rainflow import (
     find_peaks_and_valleys,
     get_cycle_matrix,
     get_histogram_data,
-    find_range_mean_pairs,
     calculate_equivalent_constant_amplitude,
     get_cumulative_cycles,
+    compute_junction_temperature,
+    compute_junction_temperature_foster,
+    compute_junction_temperature_multi_source,
+    compute_thermal_summary,
+    build_cycle_matrix_table,
+    estimate_damage_from_life_curve,
+    compute_model_based_damage,
+    compute_from_to_matrix,
+    compute_amplitude_histogram,
     Cycle,
-    RainflowResult
 )
 from app.schemas.rainflow import (
     RainflowRequest,
@@ -30,7 +37,9 @@ from app.schemas.rainflow import (
     RainflowHistogramResponse,
     CycleCount,
     DataPoint,
-    HistogramBin
+    HistogramBin,
+    RainflowPipelineRequest,
+    RainflowPipelineResponse,
 )
 
 
@@ -75,8 +84,6 @@ async def count_cycles(request: RainflowRequest):
 
         # Calculate summary statistics
         ranges = np.array([cycle.range for cycle in result.cycles]) if result.cycles else np.array([])
-        counts = np.array([cycle.count for cycle in result.cycles]) if result.cycles else np.array([])
-
         summary = {
             "total_cycles": float(total_cycles),
             "unique_cycles": len(result.cycles),
@@ -163,6 +170,12 @@ async def get_cycle_matrix_data(
     Returns 2D histogram data for heatmap visualization.
     """
     try:
+        if bin_count < 8 or bin_count > 256:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="bin_count must be between 8 and 256"
+            )
+
         # Convert to core cycles
         core_cycles = [
             Cycle(
@@ -193,6 +206,8 @@ async def get_cycle_matrix_data(
             "shape": matrix.shape
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error generating cycle matrix: {e}")
         raise HTTPException(
@@ -229,8 +244,7 @@ async def calculate_equivalent_amplitude(
 
         return {
             "equivalent_range": float(equivalent),
-            "exponent": exponent,
-            "note": "Equivalent constant amplitude that causes same damage"
+            "exponent": exponent
         }
 
     except Exception as e:
@@ -374,4 +388,181 @@ async def analyze_time_series(data_points: List[DataPoint]) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.post('/pipeline', response_model=RainflowPipelineResponse)
+async def run_rainflow_pipeline(request: RainflowPipelineRequest) -> RainflowPipelineResponse:
+    """Run one-stop workflow: input -> Tj -> rainflow -> matrix -> damage.
+
+    Supports four input modes:
+    1. Pre-computed junction_temperature series.
+    2. power_curve + foster_params  (Foster RC network — single source).
+    3. power_curve + thermal_impedance_curve (convolution — single source).
+    4. power_curves + zth_matrix  (multi-heat-source matrix Foster convolution).
+
+    Damage calculation supports two strategies:
+    a. Manual life_curve (ΔTj-Nf log-interpolation).
+    b. Registered lifetime_model with model_params (ModelFactory).
+    """
+    try:
+        all_tj: dict | None = None  # multi-source results
+
+        # ---- Step 1: obtain Tj series ----------------------------------
+        if request.junction_temperature is not None:
+            tj_series = [float(v) for v in request.junction_temperature]
+
+        elif (request.power_curves is not None
+              and request.zth_matrix is not None):
+            # ---- Mode 4: multi-source matrix Foster convolution --------
+            zth_mat = [
+                [
+                    [{'R': e.R, 'tau': e.tau} for e in cell]
+                    for cell in row
+                ]
+                for row in request.zth_matrix
+            ]
+            all_tj_list = compute_junction_temperature_multi_source(
+                power_curves=request.power_curves,
+                zth_matrix=zth_mat,
+                ambient_temperature=request.ambient_temperature,
+                dt=request.dt,
+            )
+            names = request.source_names or [
+                f'Node_{i}' for i in range(len(all_tj_list))
+            ]
+            all_tj = {
+                names[i]: all_tj_list[i]
+                for i in range(len(all_tj_list))
+            }
+            # Select target node for downstream analysis
+            target = min(request.target_node, len(all_tj_list) - 1)
+            tj_series = all_tj_list[target]
+
+        elif request.foster_params is not None and request.power_curve is not None:
+            tj_series = compute_junction_temperature_foster(
+                power_curve=request.power_curve,
+                foster_params=[{'R': e.R, 'tau': e.tau}
+                               for e in request.foster_params],
+                ambient_temperature=request.ambient_temperature,
+                dt=request.dt,
+            )
+        elif (request.power_curve is not None
+              and request.thermal_impedance_curve is not None):
+            tj_series = compute_junction_temperature(
+                power_curve=request.power_curve,
+                thermal_impedance_curve=request.thermal_impedance_curve,
+                ambient_temperature=request.ambient_temperature,
+                response_type=request.response_type,
+                dt=request.dt,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=('Provide junction_temperature, '
+                        'power_curve + foster_params, '
+                        'power_curve + thermal_impedance_curve, '
+                        'or power_curves + zth_matrix'),
+            )
+
+        if len(tj_series) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='At least 3 junction temperature points are required',
+            )
+
+        # ---- Step 2: thermal summary -----------------------------------
+        thermal_summary = compute_thermal_summary(tj_series)
+
+        # ---- Step 3: rainflow counting ---------------------------------
+        rf_result = rainflow_counting(
+            tj_series,
+            bin_count=request.bin_count,
+            rearrange=request.rearrange,
+        )
+
+        cycles = [
+            CycleCount(
+                stress_range=float(c.range),
+                mean_value=float(c.mean),
+                cycles=float(c.count),
+            )
+            for c in rf_result.cycles
+        ]
+
+        total_cycles = float(sum(c.count for c in rf_result.cycles))
+        max_range = float(max((c.range for c in rf_result.cycles), default=0.0))
+        matrix_rows = build_cycle_matrix_table(rf_result.cycles, decimals=2)
+
+        ranges = (np.array([c.range for c in rf_result.cycles])
+                  if rf_result.cycles else np.array([]))
+        summary = {
+            'total_cycles': total_cycles,
+            'unique_cycles': len(rf_result.cycles),
+            'max_range': max_range,
+            'mean_range': float(np.mean(ranges)) if len(ranges) > 0 else 0.0,
+            'std_range': float(np.std(ranges)) if len(ranges) > 1 else 0.0,
+            'residual_points': len(rf_result.residual) if rf_result.residual else 0,
+        }
+
+        # ---- Step 3b: From-To matrix & amplitude histogram -------------
+        from_to = compute_from_to_matrix(
+            rf_result.reversals or [],
+            n_band=request.n_band,
+            y_min=request.y_min,
+            y_max=request.y_max,
+        )
+        amp_hist = compute_amplitude_histogram(
+            rf_result.cycles,
+            n_bins=request.n_band,
+            ignore_below=request.ignore_below,
+        )
+
+        # ---- Step 4: Miner damage (optional) ---------------------------
+        damage = None
+        model_damage = None
+
+        if request.lifetime_model and request.model_params:
+            # Strategy B: model-based CDI
+            model_damage = compute_model_based_damage(
+                rf_result.cycles,
+                model_name=request.lifetime_model,
+                model_params=request.model_params,
+                safety_factor=request.safety_factor,
+            )
+            # Also expose as `damage` for backward compat display
+            damage = model_damage
+
+        elif request.life_curve:
+            # Strategy A: manual life-curve interpolation
+            damage = estimate_damage_from_life_curve(
+                rf_result.cycles,
+                life_curve=[{'delta_tj': item.delta_tj, 'nf': item.nf}
+                            for item in request.life_curve],
+                reference_delta_tj=request.reference_delta_tj,
+            )
+
+        return RainflowPipelineResponse(
+            junction_temperature=tj_series,
+            thermal_summary=thermal_summary,
+            cycles=cycles,
+            matrix_rows=matrix_rows,
+            total_cycles=total_cycles,
+            max_range=max_range,
+            summary=summary,
+            damage=damage,
+            from_to_matrix=from_to,
+            amplitude_histogram=amp_hist,
+            residual=rf_result.residual,
+            all_junction_temperatures=all_tj,
+            model_damage=model_damage,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Error in rainflow pipeline: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Rainflow pipeline failed: {str(e)}',
         )

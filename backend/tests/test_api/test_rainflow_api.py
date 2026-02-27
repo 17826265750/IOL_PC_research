@@ -19,7 +19,7 @@ from app.core.rainflow import Cycle
 
 
 class TestRainflowCountEndpoint:
-    """Test /rainflow/count endpoint."""
+    """Test /api/rainflow/count endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -38,7 +38,7 @@ class TestRainflowCountEndpoint:
             "bin_count": 32
         }
 
-        response = self.client.post("/rainflow/count", json=request_data)
+        response = self.client.post("/api/rainflow/count", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -56,7 +56,7 @@ class TestRainflowCountEndpoint:
             "bin_count": 32
         }
 
-        response = self.client.post("/rainflow/count", json=request_data)
+        response = self.client.post("/api/rainflow/count", json=request_data)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -67,7 +67,7 @@ class TestRainflowCountEndpoint:
             "bin_count": 32
         }
 
-        response = self.client.post("/rainflow/count", json=request_data)
+        response = self.client.post("/api/rainflow/count", json=request_data)
 
         # Should handle gracefully or return empty result
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
@@ -81,7 +81,7 @@ class TestRainflowCountEndpoint:
             "bin_count": 32
         }
 
-        response = self.client.post("/rainflow/count", json=request_data)
+        response = self.client.post("/api/rainflow/count", json=request_data)
 
         data = response.json()
         summary = data["summary"]
@@ -94,7 +94,7 @@ class TestRainflowCountEndpoint:
 
 
 class TestRainflowHistogramEndpoint:
-    """Test /rainflow/histogram endpoint."""
+    """Test /api/rainflow/histogram endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -110,7 +110,7 @@ class TestRainflowHistogramEndpoint:
             "bin_count": 10
         }
 
-        response = self.client.post("/rainflow/histogram", json=request_data)
+        response = self.client.post("/api/rainflow/histogram", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -126,14 +126,14 @@ class TestRainflowHistogramEndpoint:
             "bin_count": 50
         }
 
-        response = self.client.post("/rainflow/histogram", json=request_data)
+        response = self.client.post("/api/rainflow/histogram", json=request_data)
 
         data = response.json()
         assert len(data["bins"]) == 50
 
 
 class TestRainflowMatrixEndpoint:
-    """Test /rainflow/matrix endpoint."""
+    """Test /api/rainflow/matrix endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -146,7 +146,7 @@ class TestRainflowMatrixEndpoint:
             {"stress_range": 80, "mean_value": 40, "cycles": 0.5},
         ]
 
-        response = self.client.post("/rainflow/matrix?bin_count=32", json=cycles)
+        response = self.client.post("/api/rainflow/matrix?bin_count=32", json=cycles)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -162,7 +162,7 @@ class TestRainflowMatrixEndpoint:
             {"stress_range": 100, "mean_value": 50, "cycles": 1},
         ]
 
-        response = self.client.post("/rainflow/matrix?bin_count=64", json=cycles)
+        response = self.client.post("/api/rainflow/matrix?bin_count=64", json=cycles)
 
         data = response.json()
         assert "shape" in data
@@ -170,7 +170,7 @@ class TestRainflowMatrixEndpoint:
 
 
 class TestRainflowEquivalentEndpoint:
-    """Test /rainflow/equivalent endpoint."""
+    """Test /api/rainflow/equivalent endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -183,7 +183,7 @@ class TestRainflowEquivalentEndpoint:
             {"stress_range": 80, "mean_value": 40, "cycles": 1},
         ]
 
-        response = self.client.post("/rainflow/equivalent?exponent=3.0", json=cycles)
+        response = self.client.post("/api/rainflow/equivalent?exponent=3.0", json=cycles)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -194,10 +194,11 @@ class TestRainflowEquivalentEndpoint:
         """Test that exponent affects result."""
         cycles = [
             {"stress_range": 100, "mean_value": 50, "cycles": 1},
+            {"stress_range": 80, "mean_value": 40, "cycles": 1},
         ]
 
-        response1 = self.client.post("/rainflow/equivalent?exponent=2.0", json=cycles)
-        response2 = self.client.post("/rainflow/equivalent?exponent=4.0", json=cycles)
+        response1 = self.client.post("/api/rainflow/equivalent?exponent=2.0", json=cycles)
+        response2 = self.client.post("/api/rainflow/equivalent?exponent=4.0", json=cycles)
 
         data1 = response1.json()
         data2 = response2.json()
@@ -208,7 +209,7 @@ class TestRainflowEquivalentEndpoint:
 
 
 class TestRainflowCumulativeEndpoint:
-    """Test /rainflow/cumulative endpoint."""
+    """Test /api/rainflow/cumulative endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -222,7 +223,7 @@ class TestRainflowCumulativeEndpoint:
             {"stress_range": 80, "mean_value": 40, "cycles": 1},
         ]
 
-        response = self.client.post("/rainflow/cumulative", json=cycles)
+        response = self.client.post("/api/rainflow/cumulative", json=cycles)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -237,7 +238,7 @@ class TestRainflowCumulativeEndpoint:
             for i in range(1, 6)
         ]
 
-        response = self.client.post("/rainflow/cumulative", json=cycles)
+        response = self.client.post("/api/rainflow/cumulative", json=cycles)
 
         data = response.json()
         cumulative = data["cumulative_counts"]
@@ -248,7 +249,7 @@ class TestRainflowCumulativeEndpoint:
 
 
 class TestRainflowPeaksEndpoint:
-    """Test /rainflow/peaks endpoint."""
+    """Test /api/rainflow/peaks endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -260,7 +261,7 @@ class TestRainflowPeaksEndpoint:
             {"value": v} for v in [0, 50, 100, 50, 0, -50, -100, -50, 0]
         ]
 
-        response = self.client.post("/rainflow/peaks", json=data_points)
+        response = self.client.post("/api/rainflow/peaks", json=data_points)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -272,7 +273,7 @@ class TestRainflowPeaksEndpoint:
         """Test with single data point."""
         data_points = [{"value": 42}]
 
-        response = self.client.post("/rainflow/peaks", json=data_points)
+        response = self.client.post("/api/rainflow/peaks", json=data_points)
 
         data = response.json()
         assert data["count"] == 1
@@ -281,14 +282,14 @@ class TestRainflowPeaksEndpoint:
         """Test with two data points."""
         data_points = [{"value": 0}, {"value": 100}]
 
-        response = self.client.post("/rainflow/peaks", json=data_points)
+        response = self.client.post("/api/rainflow/peaks", json=data_points)
 
         data = response.json()
         assert data["count"] == 2
 
 
 class TestRainflowAnalyzeEndpoint:
-    """Test /rainflow/analyze endpoint."""
+    """Test /api/rainflow/analyze endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -300,7 +301,7 @@ class TestRainflowAnalyzeEndpoint:
             {"value": v} for v in [0, 100, 0, 80, 0, 60, 0, 120, 0]
         ]
 
-        response = self.client.post("/rainflow/analyze", json=data_points)
+        response = self.client.post("/api/rainflow/analyze", json=data_points)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -314,7 +315,7 @@ class TestRainflowAnalyzeEndpoint:
             {"value": v} for v in [0, 50, 100, 50, 0]
         ]
 
-        response = self.client.post("/rainflow/analyze", json=data_points)
+        response = self.client.post("/api/rainflow/analyze", json=data_points)
 
         data = response.json()
         stats = data["statistics"]
@@ -333,7 +334,7 @@ class TestRainflowAnalyzeEndpoint:
             {"value": 50}
         ]
 
-        response = self.client.post("/rainflow/analyze", json=data_points)
+        response = self.client.post("/api/rainflow/analyze", json=data_points)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -348,7 +349,7 @@ class TestRainflowErrorHandling:
     def test_invalid_json(self):
         """Test with invalid JSON."""
         response = self.client.post(
-            "/rainflow/count",
+            "/api/rainflow/count",
             data="invalid json",
             headers={"Content-Type": "application/json"}
         )
@@ -361,7 +362,7 @@ class TestRainflowErrorHandling:
             "data_points": []  # Missing bin_count (has default)
         }
 
-        response = self.client.post("/rainflow/count", json=request_data)
+        response = self.client.post("/api/rainflow/count", json=request_data)
 
         # Should still work (bin_count has default)
         # or return error for empty data
@@ -373,7 +374,7 @@ class TestRainflowErrorHandling:
             {"stress_range": 100, "mean_value": 50, "cycles": 1},
         ]
 
-        response = self.client.post("/rainflow/matrix?bin_count=-10", json=cycles)
+        response = self.client.post("/api/rainflow/matrix?bin_count=-10", json=cycles)
 
         # Should handle error or return empty matrix
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_422_UNPROCESSABLE_ENTITY]
@@ -397,7 +398,7 @@ class TestRainflowRealWorldScenarios:
 
         data_points = [{"value": float(v)} for v in thermal_data]
 
-        response = self.client.post("/rainflow/analyze", json=data_points)
+        response = self.client.post("/api/rainflow/analyze", json=data_points)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

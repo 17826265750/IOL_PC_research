@@ -10,7 +10,6 @@ import {
 } from '@mui/material'
 import {
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import ReactECharts from 'echarts-for-react'
 import { RainflowCycle } from '@/types'
@@ -33,19 +32,24 @@ export const CycleMatrix: React.FC<Props> = ({ cycles, onExport }) => {
       (a, b) => a - b
     )
 
-    // Create matrix data
-    const data: number[][] = []
+    // Create matrix data (aggregate identical cells)
+    const matrixMap = new Map<string, number>()
     let maxCount = 0
 
     cycles.forEach((cycle) => {
       const xIndex = ranges.indexOf(Math.round(cycle.range * 10) / 10)
       const yIndex = means.indexOf(Math.round(cycle.mean * 10) / 10)
       if (xIndex !== -1 && yIndex !== -1) {
-        data.push([xIndex, yIndex, cycle.count])
-        if (cycle.count > maxCount) {
-          maxCount = cycle.count
-        }
+        const key = `${xIndex}|${yIndex}`
+        const nextCount = (matrixMap.get(key) ?? 0) + cycle.count
+        matrixMap.set(key, nextCount)
+        if (nextCount > maxCount) maxCount = nextCount
       }
+    })
+
+    const data = Array.from(matrixMap.entries()).map(([key, count]) => {
+      const [xIndex, yIndex] = key.split('|').map(Number)
+      return [xIndex, yIndex, count]
     })
 
     return {
@@ -73,7 +77,7 @@ export const CycleMatrix: React.FC<Props> = ({ cycles, onExport }) => {
         const range = matrix.xData[params.value[0]]
         const mean = matrix.yData[params.value[1]]
         const count = params.value[2]
-        return `范围: ${range}°C<br/>均值: ${mean}°C<br/>循环次数: ${count}`
+        return `ΔTj: ${range}°C<br/>平均结温: ${mean}°C<br/>循环次数: ${count}`
       },
     },
     grid: {
@@ -83,7 +87,7 @@ export const CycleMatrix: React.FC<Props> = ({ cycles, onExport }) => {
     xAxis: {
       type: 'category',
       data: matrix.xData,
-      name: '温度范围 (°C)',
+      name: 'ΔTj (°C)',
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
@@ -94,7 +98,7 @@ export const CycleMatrix: React.FC<Props> = ({ cycles, onExport }) => {
     yAxis: {
       type: 'category',
       data: matrix.yData,
-      name: '平均温度 (°C)',
+      name: '平均结温 (°C)',
       nameLocation: 'middle',
       nameGap: 50,
       axisLabel: {
@@ -151,12 +155,11 @@ export const CycleMatrix: React.FC<Props> = ({ cycles, onExport }) => {
     }
 
     // Default CSV export
-    const headers = ['范围 (°C)', '均值 (°C)', '循环次数', '类型']
+    const headers = ['ΔTj (°C)', '平均结温 (°C)', '循环次数']
     const rows = cycles.map((c) => [
       c.range.toFixed(2),
       c.mean.toFixed(2),
       c.count.toString(),
-      c.type,
     ])
 
     let csv = headers.join(',') + '\n'

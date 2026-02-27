@@ -6,7 +6,7 @@ sensitivity analysis, and confidence interval calculation.
 """
 import pytest
 import numpy as np
-from backend.app.core.damage_accumulation import (
+from app.core.damage_accumulation import (
     DamageResult,
     DamageSensitivity,
     calculate_miner_damage,

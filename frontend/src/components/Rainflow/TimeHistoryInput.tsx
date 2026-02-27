@@ -8,7 +8,6 @@ import {
   CardContent,
   Alert,
   Stack,
-  IconButton,
   Table,
   TableBody,
   TableCell,
@@ -47,7 +46,6 @@ interface Props {
 export const TimeHistoryInput: React.FC<Props> = ({ onDataSubmit }) => {
   const [tabValue, setTabValue] = useState(0)
   const [csvInput, setCsvInput] = useState('')
-  const [dataPoints, setDataPoints] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [previewData, setPreviewData] = useState<number[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -93,12 +91,8 @@ export const TimeHistoryInput: React.FC<Props> = ({ onDataSubmit }) => {
 
   const generateSampleData = () => {
     const sample: number[] = []
-    let base = 25
-    let time = 0
 
     for (let i = 0; i < 500; i++) {
-      time += 1
-
       // Generate temperature cycles with varying patterns
       const cyclePosition = (i % 100) / 100
       const baseTemp = 25 + 100 * Math.sin(cyclePosition * Math.PI)
@@ -110,12 +104,11 @@ export const TimeHistoryInput: React.FC<Props> = ({ onDataSubmit }) => {
 
     setCsvInput(sample.join('\n'))
     setPreviewData(sample.slice(0, 100))
-    setDataPoints(sample)
     setError(null)
   }
 
   const handleSubmit = () => {
-    const data = tabValue === 0 ? parseCSVInput(csvInput) : dataPoints
+    const data = parseCSVInput(csvInput)
 
     if (data.length < 4) {
       setError('至少需要4个数据点进行雨流计数分析')
@@ -131,7 +124,6 @@ export const TimeHistoryInput: React.FC<Props> = ({ onDataSubmit }) => {
 
   const handleClear = () => {
     setCsvInput('')
-    setDataPoints([])
     setPreviewData([])
     setError(null)
     if (fileInputRef.current) {
