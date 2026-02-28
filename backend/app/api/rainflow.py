@@ -509,11 +509,12 @@ async def run_rainflow_pipeline(request: RainflowPipelineRequest) -> RainflowPip
         }
 
         # ---- Step 3b: From-To matrix & amplitude histogram -------------
+        # Use thermal_summary for y_min/y_max if not explicitly provided
         from_to = compute_from_to_matrix(
             rf_result.reversals or [],
             n_band=request.n_band,
-            y_min=request.y_min,
-            y_max=request.y_max,
+            y_min=request.y_min if request.y_min is not None else thermal_summary['tj_min'],
+            y_max=request.y_max if request.y_max is not None else thermal_summary['tj_max'],
         )
         amp_hist = compute_amplitude_histogram(
             rf_result.cycles,

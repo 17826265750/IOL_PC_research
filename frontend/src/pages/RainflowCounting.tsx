@@ -170,12 +170,12 @@ export const RainflowCounting: React.FC = () => {
     () => ({
       binCount: 20,
       nBand: parseInt(s.nBand) || 20,
-      yMin: s.yMin ? parseFloat(s.yMin) : undefined,
-      yMax: s.yMax ? parseFloat(s.yMax) : undefined,
+      // yMin/yMax are determined by backend from thermal_summary
+      // to ensure from_to_matrix uses current data's temperature range
       ignoreBelow: parseFloat(s.ignoreBelow) || 0,
       rearrange: s.rearrange,
     }),
-    [s.nBand, s.yMin, s.yMax, s.ignoreBelow, s.rearrange],
+    [s.nBand, s.ignoreBelow, s.rearrange],
   )
 
   const runPipeline = useCallback(
@@ -196,10 +196,10 @@ export const RainflowCounting: React.FC = () => {
             updates.allTjSeries = data.allJunctionTemperatures
           }
 
-          // Auto-fill yMin/yMax from thermal summary when empty
+          // Auto-fill yMin/yMax from thermal summary (always update)
           if (data.thermalSummary) {
-            if (!s.yMin) updates.yMin = data.thermalSummary.tj_min.toFixed(1)
-            if (!s.yMax) updates.yMax = data.thermalSummary.tj_max.toFixed(1)
+            updates.yMin = data.thermalSummary.tj_min.toFixed(1)
+            updates.yMax = data.thermalSummary.tj_max.toFixed(1)
           }
 
           patch(updates as Partial<typeof s>)
