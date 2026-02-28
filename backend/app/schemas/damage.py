@@ -210,7 +210,7 @@ class DamageResponse(BaseModel):
 
 class LifetimePredictionRequest(BaseModel):
     """Request for lifetime prediction using CIPS 2008 models."""
-    mission_profile_id: int = Field(..., description="Mission profile ID")
+    mission_profile_id: Optional[int] = Field(None, description="Mission profile ID (optional)")
     model_type: str = Field(..., description="Lifetime model to use")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Model parameters")
     safety_factor: float = Field(default=1.0, ge=0.1, le=10.0)

@@ -33,9 +33,7 @@ from app.core.fitting import (
     FittingError
 )
 from app.core.sensitivity import (
-    single_parameter_sensitivity,
     tornado_analysis,
-    two_parameter_sensitivity,
     SensitivityResult,
     TornadoData
 )

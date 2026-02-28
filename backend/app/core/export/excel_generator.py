@@ -15,13 +15,10 @@ from dataclasses import dataclass
 
 from openpyxl import Workbook
 from openpyxl.styles import (
-    Font, Alignment, PatternFill, Border, Side,
-    NamedStyle, GradientFill
+    Font, Alignment, PatternFill, Border, Side
 )
-from openpyxl.utils import get_column_letter
 from openpyxl.chart import (
-    BarChart, LineChart, PieChart, Reference,
-    Series
+    BarChart, LineChart, Reference
 )
 import matplotlib
 matplotlib.use('Agg')

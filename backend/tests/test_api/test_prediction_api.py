@@ -10,6 +10,7 @@ Tests include:
 
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from fastapi.testclient import TestClient
 from fastapi import status
 
@@ -18,7 +19,7 @@ from app.core.models.model_factory import ModelFactory
 
 
 class TestPredictionCalculateEndpoint:
-    """Test /prediction/calculate endpoint."""
+    """Test /api/prediction/calculate endpoint."""
 
     def setup_method(self):
         """Set up test client and register models."""
@@ -37,7 +38,7 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 1.0
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -60,7 +61,7 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 1.0
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -74,7 +75,7 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 1.0
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -90,7 +91,7 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 2.0  # 50% life
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
         data = response.json()
         # With safety_factor=2, cycles should be half
@@ -104,10 +105,10 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 1.0
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
-        # Should return error
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        # Should return error (400 Bad Request - invalid model type)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_invalid_parameters(self):
         """Test with invalid parameters."""
@@ -119,13 +120,13 @@ class TestPredictionCalculateEndpoint:
             "safety_factor": 1.0
         }
 
-        response = self.client.post("/prediction/calculate", json=request_data)
+        response = self.client.post("/api/prediction/calculate", json=request_data)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 class TestPredictionCompareEndpoint:
-    """Test /prediction/compare endpoint."""
+    """Test /api/prediction/compare endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -141,7 +142,7 @@ class TestPredictionCompareEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/compare", json=request_data)
+        response = self.client.post("/api/prediction/compare", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -157,7 +158,7 @@ class TestPredictionCompareEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/compare", json=request_data)
+        response = self.client.post("/api/prediction/compare", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -172,7 +173,7 @@ class TestPredictionCompareEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/compare", json=request_data)
+        response = self.client.post("/api/prediction/compare", json=request_data)
 
         data = response.json()
         stats = data["statistics"]
@@ -187,7 +188,7 @@ class TestPredictionCompareEndpoint:
 
 
 class TestPredictionSensitivityEndpoint:
-    """Test /prediction/sensitivity endpoint."""
+    """Test /api/prediction/sensitivity endpoint."""
 
     def setup_method(self):
         """Set up test client."""
@@ -209,7 +210,7 @@ class TestPredictionSensitivityEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/sensitivity", json=request_data)
+        response = self.client.post("/api/prediction/sensitivity", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -232,7 +233,7 @@ class TestPredictionSensitivityEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/sensitivity", json=request_data)
+        response = self.client.post("/api/prediction/sensitivity", json=request_data)
 
         data = response.json()
         # Should have results for all parameters
@@ -253,7 +254,7 @@ class TestPredictionSensitivityEndpoint:
             }
         }
 
-        response = self.client.post("/prediction/sensitivity", json=request_data)
+        response = self.client.post("/api/prediction/sensitivity", json=request_data)
 
         data = response.json()
         assert "most_sensitive_parameter" in data
@@ -269,7 +270,7 @@ class TestPredictionModelsEndpoint:
 
     def test_list_available_models(self):
         """Test listing all available models."""
-        response = self.client.get("/prediction/models/available")
+        response = self.client.get("/api/prediction/models/available")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -284,7 +285,7 @@ class TestPredictionModelsEndpoint:
 
     def test_get_model_info(self):
         """Test getting info for specific model."""
-        response = self.client.get("/prediction/models/coffin-manson")
+        response = self.client.get("/api/prediction/models/coffin-manson")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -294,7 +295,7 @@ class TestPredictionModelsEndpoint:
 
     def test_get_model_info_not_found(self):
         """Test getting info for non-existent model."""
-        response = self.client.get("/prediction/models/nonexistent")
+        response = self.client.get("/api/prediction/models/nonexistent")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -315,7 +316,7 @@ class TestPredictionCRUDEndpoints:
         # Mock CRUD operations
         with patch('app.api.prediction.prediction_crud.get_multi') as mock_get_multi:
             mock_get_multi.return_value = []
-            response = self.client.get("/prediction?skip=0&limit=10")
+            response = self.client.get("/api/prediction?skip=0&limit=10")
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -326,19 +327,27 @@ class TestPredictionCRUDEndpoints:
         mock_get_db.return_value = mock_db
 
         request_data = {
+            "name": "Test Prediction",
             "model_type": "coffin-manson",
-            "delta_Tj": 80,
-            "Tj_max": 398,
-            "t_on": 1.0,
-            "predicted_lifetime": 10000.0,
-            "safety_factor": 1.0
+            "notes": "Test notes"
         }
 
         with patch('app.api.prediction.prediction_crud.create') as mock_create:
             mock_pred = Mock()
             mock_pred.id = 1
+            mock_pred.name = "Test Prediction"
+            mock_pred.model_type = "coffin-manson"
+            mock_pred.predicted_lifetime_years = None
+            mock_pred.predicted_lifetime_cycles = None
+            mock_pred.total_damage = None
+            mock_pred.confidence_level = None
+            mock_pred.parameters_id = None
+            mock_pred.mission_profile_id = None
+            mock_pred.notes = "Test notes"
+            mock_pred.created_at = datetime.now()
+            mock_pred.updated_at = datetime.now()
             mock_create.return_value = mock_pred
-            response = self.client.post("/prediction", json=request_data)
+            response = self.client.post("/api/prediction", json=request_data)
 
         assert response.status_code == status.HTTP_201_CREATED
 
@@ -349,8 +358,21 @@ class TestPredictionCRUDEndpoints:
         mock_get_db.return_value = mock_db
 
         with patch('app.api.prediction.prediction_crud.get') as mock_get:
-            mock_get.return_value = Mock(id=1)
-            response = self.client.get("/prediction/1")
+            mock_pred = Mock()
+            mock_pred.id = 1
+            mock_pred.name = "Test Prediction"
+            mock_pred.model_type = "coffin-manson"
+            mock_pred.predicted_lifetime_years = 10.5
+            mock_pred.predicted_lifetime_cycles = 92000
+            mock_pred.total_damage = 0.5
+            mock_pred.confidence_level = 0.95
+            mock_pred.parameters_id = None
+            mock_pred.mission_profile_id = None
+            mock_pred.notes = None
+            mock_pred.created_at = datetime.now()
+            mock_pred.updated_at = datetime.now()
+            mock_get.return_value = mock_pred
+            response = self.client.get("/api/prediction/1")
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -362,7 +384,7 @@ class TestPredictionCRUDEndpoints:
 
         with patch('app.api.prediction.prediction_crud.get') as mock_get:
             mock_get.return_value = None
-            response = self.client.get("/prediction/999")
+            response = self.client.get("/api/prediction/999")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -373,15 +395,41 @@ class TestPredictionCRUDEndpoints:
         mock_get_db.return_value = mock_db
 
         request_data = {
-            "predicted_lifetime": 15000.0
+            "predicted_lifetime_years": 15.0
         }
 
         with patch('app.api.prediction.prediction_crud.get') as mock_get_pred:
-            mock_get_pred.return_value = Mock(id=1)
+            mock_pred = Mock()
+            mock_pred.id = 1
+            mock_pred.name = "Test Prediction"
+            mock_pred.model_type = "coffin-manson"
+            mock_pred.predicted_lifetime_years = 10.5
+            mock_pred.predicted_lifetime_cycles = 92000
+            mock_pred.total_damage = 0.5
+            mock_pred.confidence_level = 0.95
+            mock_pred.parameters_id = None
+            mock_pred.mission_profile_id = None
+            mock_pred.notes = None
+            mock_pred.created_at = datetime.now()
+            mock_pred.updated_at = datetime.now()
+            mock_get_pred.return_value = mock_pred
 
             with patch('app.api.prediction.prediction_crud.update') as mock_update:
-                mock_update.return_value = Mock(id=1)
-                response = self.client.put("/prediction/1", json=request_data)
+                mock_updated = Mock()
+                mock_updated.id = 1
+                mock_updated.name = "Test Prediction"
+                mock_updated.model_type = "coffin-manson"
+                mock_updated.predicted_lifetime_years = 15.0
+                mock_updated.predicted_lifetime_cycles = 92000
+                mock_updated.total_damage = 0.5
+                mock_updated.confidence_level = 0.95
+                mock_updated.parameters_id = None
+                mock_updated.mission_profile_id = None
+                mock_updated.notes = None
+                mock_updated.created_at = datetime.now()
+                mock_updated.updated_at = datetime.now()
+                mock_update.return_value = mock_updated
+                response = self.client.put("/api/prediction/1", json=request_data)
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -395,6 +443,6 @@ class TestPredictionCRUDEndpoints:
             mock_get.return_value = Mock(id=1)
 
             with patch('app.api.prediction.prediction_crud.delete') as mock_delete:
-                response = self.client.delete("/prediction/1")
+                response = self.client.delete("/api/prediction/1")
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
