@@ -30,7 +30,7 @@ import { TimeHistoryInput } from '@/components/Rainflow/TimeHistoryInput'
 import { apiService } from '@/services/api'
 import type { RainflowResult } from '@/types'
 import { useRainflowStore } from '@/stores/useRainflowStore'
-import type { InputMode, ZthMode, DamageMethod } from '@/stores/useRainflowStore'
+import type { InputMode, ZthMode } from '@/stores/useRainflowStore'
 
 /* ------------------------------------------------------------------ */
 /*  TabPanel                                                           */
@@ -159,20 +159,6 @@ export const RainflowCounting: React.FC = () => {
     [],
   )
 
-  const parseLifeCurve = useCallback(
-    (text: string) =>
-      text
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => {
-          const [dTj, nf] = l.split(/[,\s]+/).map(Number)
-          return { deltaTj: dTj, nf }
-        })
-        .filter((e) => e.deltaTj > 0 && e.nf > 0),
-    [],
-  )
-
   /* ================================================================ */
   /*  Pipeline runner                                                  */
   /* ================================================================ */
@@ -251,8 +237,8 @@ export const RainflowCounting: React.FC = () => {
         payload.thermalImpedanceCurve = zthValues
         payload.responseType = 'step'
       }
-      // Damage strategy
-      if (s.damageMethod === 'model' && s.lifetimeModel) {
+      // Always use model-based damage
+      if (s.lifetimeModel) {
         const mp: Record<string, number> = {}
         Object.entries(s.modelParamsInput).forEach(([k, v]) => {
           const n = parseFloat(v); if (!isNaN(n)) mp[k] = n
@@ -260,21 +246,15 @@ export const RainflowCounting: React.FC = () => {
         payload.lifetimeModel = s.lifetimeModel
         payload.modelParams = mp
         payload.safetyFactor = parseFloat(s.safetyFactor) || 1.0
-      } else {
-        const lc = parseLifeCurve(s.lifeCurveInput)
-        if (lc.length >= 2) {
-          payload.lifeCurve = lc
-          payload.referenceDeltaTj = lc[0].deltaTj
-        }
       }
       await runPipeline(payload)
       patch({ tab: 1 })
     },
     [
-      parseFoster, parseNumbers, parseLifeCurve,
-      s.fosterInput, s.zthInput, s.lifeCurveInput,
+      parseFoster, parseNumbers,
+      s.fosterInput, s.zthInput,
       s.ambientTemp, s.dt, s.zthMode,
-      s.damageMethod, s.lifetimeModel, s.modelParamsInput, s.safetyFactor,
+      s.lifetimeModel, s.modelParamsInput, s.safetyFactor,
       commonPayload, runPipeline, patch,
     ],
   )
@@ -282,16 +262,23 @@ export const RainflowCounting: React.FC = () => {
   const handleTjSubmit = useCallback(
     async (data: number[]) => {
       patch({ tjSeries: data })
-      const lc = parseLifeCurve(s.lifeCurveInput)
-      await runPipeline({
+      const base: Parameters<typeof apiService.runRainflowPipeline>[0] = {
         junctionTemperature: data,
         ...commonPayload(),
-        lifeCurve: lc.length >= 2 ? lc : undefined,
-        referenceDeltaTj: lc.length >= 1 ? lc[0].deltaTj : undefined,
-      })
+      }
+      if (s.lifetimeModel) {
+        const mp: Record<string, number> = {}
+        Object.entries(s.modelParamsInput).forEach(([k, v]) => {
+          const n = parseFloat(v); if (!isNaN(n)) mp[k] = n
+        })
+        base.lifetimeModel = s.lifetimeModel
+        base.modelParams = mp
+        base.safetyFactor = parseFloat(s.safetyFactor) || 1.0
+      }
+      await runPipeline(base)
       patch({ tab: 1 })
     },
-    [parseLifeCurve, s.lifeCurveInput, commonPayload, runPipeline, patch],
+    [s.lifetimeModel, s.modelParamsInput, s.safetyFactor, commonPayload, runPipeline, patch],
   )
 
   const handleMultiSourceSubmit = useCallback(async () => {
@@ -320,7 +307,7 @@ export const RainflowCounting: React.FC = () => {
       dt: parseFloat(s.dt) || 1.0,
       ...commonPayload(),
     }
-    if (s.damageMethod === 'model' && s.lifetimeModel) {
+    if (s.lifetimeModel) {
       const mp: Record<string, number> = {}
       Object.entries(s.modelParamsInput).forEach(([k, v]) => {
         const num = parseFloat(v); if (!isNaN(num)) mp[k] = num
@@ -328,21 +315,14 @@ export const RainflowCounting: React.FC = () => {
       payload.lifetimeModel = s.lifetimeModel
       payload.modelParams = mp
       payload.safetyFactor = parseFloat(s.safetyFactor) || 1.0
-    } else {
-      const lc = parseLifeCurve(s.lifeCurveInput)
-      if (lc.length >= 2) {
-        payload.lifeCurve = lc
-        payload.referenceDeltaTj = lc[0].deltaTj
-      }
     }
     await runPipeline(payload)
     patch({ tab: 1 })
   }, [
     s.sourceCount, s.sourcePowerData, s.sourceNames, s.zthMatrixInput,
     s.targetNode, s.ambientTemp, s.dt,
-    s.damageMethod, s.lifetimeModel, s.modelParamsInput, s.safetyFactor,
-    s.lifeCurveInput,
-    parseNumbers, parseFoster, parseLifeCurve, commonPayload, runPipeline, patch,
+    s.lifetimeModel, s.modelParamsInput, s.safetyFactor,
+    parseNumbers, parseFoster, commonPayload, runPipeline, patch,
   ])
 
   /* ---- Tab 1 handler ---- */
@@ -355,7 +335,7 @@ export const RainflowCounting: React.FC = () => {
       junctionTemperature: s.tjSeries,
       ...commonPayload(),
     }
-    if (s.damageMethod === 'model' && s.lifetimeModel) {
+    if (s.lifetimeModel) {
       const mp: Record<string, number> = {}
       Object.entries(s.modelParamsInput).forEach(([k, v]) => {
         const n = parseFloat(v); if (!isNaN(n)) mp[k] = n
@@ -363,18 +343,12 @@ export const RainflowCounting: React.FC = () => {
       base.lifetimeModel = s.lifetimeModel
       base.modelParams = mp
       base.safetyFactor = parseFloat(s.safetyFactor) || 1.0
-    } else {
-      const lc = parseLifeCurve(s.lifeCurveInput)
-      if (lc.length >= 2) {
-        base.lifeCurve = lc
-        base.referenceDeltaTj = lc[0].deltaTj
-      }
     }
     await runPipeline(base)
   }, [
-    s.tjSeries, s.damageMethod, s.lifetimeModel, s.modelParamsInput,
-    s.safetyFactor, s.lifeCurveInput,
-    parseLifeCurve, commonPayload, runPipeline, patch,
+    s.tjSeries, s.lifetimeModel, s.modelParamsInput,
+    s.safetyFactor,
+    commonPayload, runPipeline, patch,
   ])
 
   /* ---- Tab 2 handler ---- */
@@ -383,36 +357,26 @@ export const RainflowCounting: React.FC = () => {
       patch({ error: '请先在「功耗变温度」页输入数据' })
       return
     }
+    if (!s.lifetimeModel) {
+      patch({ error: '请选择寿命模型' })
+      return
+    }
     const base: Parameters<typeof apiService.runRainflowPipeline>[0] = {
       junctionTemperature: s.tjSeries,
       ...commonPayload(),
     }
-    if (s.damageMethod === 'model') {
-      if (!s.lifetimeModel) {
-        patch({ error: '请选择寿命模型' })
-        return
-      }
-      const mp: Record<string, number> = {}
-      Object.entries(s.modelParamsInput).forEach(([k, v]) => {
-        const n = parseFloat(v); if (!isNaN(n)) mp[k] = n
-      })
-      base.lifetimeModel = s.lifetimeModel
-      base.modelParams = mp
-      base.safetyFactor = parseFloat(s.safetyFactor) || 1.0
-    } else {
-      const lc = parseLifeCurve(s.lifeCurveInput)
-      if (lc.length < 2) {
-        patch({ error: '至少需要2组 (ΔTj, Nf) 数据' })
-        return
-      }
-      base.lifeCurve = lc
-      base.referenceDeltaTj = lc[0].deltaTj
-    }
+    const mp: Record<string, number> = {}
+    Object.entries(s.modelParamsInput).forEach(([k, v]) => {
+      const n = parseFloat(v); if (!isNaN(n)) mp[k] = n
+    })
+    base.lifetimeModel = s.lifetimeModel
+    base.modelParams = mp
+    base.safetyFactor = parseFloat(s.safetyFactor) || 1.0
     await runPipeline(base)
   }, [
-    s.tjSeries, s.damageMethod, s.lifetimeModel, s.modelParamsInput,
-    s.safetyFactor, s.lifeCurveInput,
-    parseLifeCurve, commonPayload, runPipeline, patch,
+    s.tjSeries, s.lifetimeModel, s.modelParamsInput,
+    s.safetyFactor,
+    commonPayload, runPipeline, patch,
   ])
 
   /* ================================================================ */
@@ -1164,152 +1128,95 @@ export const RainflowCounting: React.FC = () => {
         {/* ========================================================= */}
         <TabPanel value={s.tab} index={2}>
           <Stack spacing={2}>
-            {/* Damage method selector */}
+            {/* Model selector + safety factor */}
             <Paper sx={{ p: 2 }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={4}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>损伤计算方式</InputLabel>
+                    <InputLabel>寿命模型</InputLabel>
                     <Select
-                      value={s.damageMethod}
-                      label="损伤计算方式"
-                      onChange={(e) =>
-                        patch({ damageMethod: e.target.value as DamageMethod })
-                      }
+                      value={s.lifetimeModel}
+                      label="寿命模型"
+                      onChange={(e) => {
+                        const name = e.target.value as string
+                        const cfg = MODEL_PARAMS_CONFIG[name]
+                        if (cfg) {
+                          const defaults: Record<string, string> = {}
+                          cfg.params.forEach((p) => {
+                            defaults[p.key] = p.defaultValue
+                          })
+                          patch({ lifetimeModel: name, modelParamsInput: defaults })
+                        } else {
+                          patch({ lifetimeModel: name })
+                        }
+                      }}
                     >
-                      <MenuItem value="life_curve">手动寿命曲线 (ΔTj-Nf)</MenuItem>
-                      <MenuItem value="model">寿命模型计算</MenuItem>
+                      {Object.entries(MODEL_PARAMS_CONFIG).map(([key, cfg]) => (
+                        <MenuItem key={key} value={key}>{cfg.label}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
-                {s.damageMethod === 'model' && (
-                  <Grid item xs={12} sm={4}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>寿命模型</InputLabel>
-                      <Select
-                        value={s.lifetimeModel}
-                        label="寿命模型"
-                        onChange={(e) => {
-                          const name = e.target.value as string
-                          const cfg = MODEL_PARAMS_CONFIG[name]
-                          if (cfg) {
-                            const defaults: Record<string, string> = {}
-                            cfg.params.forEach((p) => {
-                              defaults[p.key] = p.defaultValue
-                            })
-                            patch({ lifetimeModel: name, modelParamsInput: defaults })
-                          } else {
-                            patch({ lifetimeModel: name })
-                          }
-                        }}
-                      >
-                        {Object.entries(MODEL_PARAMS_CONFIG).map(([key, cfg]) => (
-                          <MenuItem key={key} value={key}>{cfg.label}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                )}
-                {s.damageMethod === 'model' && (
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      label="安全系数 f_safe"
-                      size="small"
-                      fullWidth
-                      value={s.safetyFactor}
-                      onChange={(e) => patch({ safetyFactor: e.target.value })}
-                    />
-                  </Grid>
-                )}
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="安全系数 f_safe"
+                    size="small"
+                    fullWidth
+                    value={s.safetyFactor}
+                    onChange={(e) => patch({ safetyFactor: e.target.value })}
+                  />
+                </Grid>
               </Grid>
             </Paper>
 
-            {/* Life curve input (manual mode) */}
-            {s.damageMethod === 'life_curve' && (
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  寿命曲线（ΔTj, Nf）
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mb: 1 }}
-                >
-                  每行一组 ΔTj (°C), Nf，逗号或空格分隔
-                </Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  maxRows={6}
-                  size="small"
-                  value={s.lifeCurveInput}
-                  onChange={(e) =>
-                    patch({ lifeCurveInput: e.target.value })
-                  }
-                  placeholder={'20, 500000\n40, 120000\n80, 30000'}
-                />
-                <Button
-                  variant="contained"
-                  sx={{ mt: 1 }}
-                  onClick={handleDamageCalc}
-                  disabled={!s.tjSeries || s.loading}
-                >
-                  计算寿命
-                </Button>
-              </Paper>
-            )}
-
-            {/* Model-based damage input */}
-            {s.damageMethod === 'model' && (
-              <Paper sx={{ p: 2 }}>
-                {MODEL_PARAMS_CONFIG[s.lifetimeModel] && (
-                  <>
-                    <Typography variant="subtitle1" gutterBottom>
-                      {MODEL_PARAMS_CONFIG[s.lifetimeModel].label} 模型参数
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 2, fontFamily: 'monospace' }}
-                    >
-                      {MODEL_PARAMS_CONFIG[s.lifetimeModel].formula}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      ΔTj、Tj_max、Tj_min、Tj_mean 由雨流计数结果自动推导，无需手动输入
-                    </Typography>
-                    <Grid container spacing={2}>
-                      {MODEL_PARAMS_CONFIG[s.lifetimeModel].params.map((p) => (
-                        <Grid item xs={6} sm={3} key={p.key}>
-                          <TextField
-                            label={p.unit ? `${p.label} (${p.unit})` : p.label}
-                            size="small"
-                            fullWidth
-                            value={s.modelParamsInput[p.key] ?? p.defaultValue}
-                            onChange={(e) =>
-                              patch({
-                                modelParamsInput: {
-                                  ...s.modelParamsInput,
-                                  [p.key]: e.target.value,
-                                },
-                              })
-                            }
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </>
-                )}
-                <Button
-                  variant="contained"
-                  sx={{ mt: 2 }}
-                  onClick={handleDamageCalc}
-                  disabled={!s.tjSeries || s.loading}
-                >
-                  计算寿命
-                </Button>
-              </Paper>
-            )}
+            {/* Model params */}
+            <Paper sx={{ p: 2 }}>
+              {MODEL_PARAMS_CONFIG[s.lifetimeModel] && (
+                <>
+                  <Typography variant="subtitle1" gutterBottom>
+                    {MODEL_PARAMS_CONFIG[s.lifetimeModel].label} 模型参数
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2, fontFamily: 'monospace' }}
+                  >
+                    {MODEL_PARAMS_CONFIG[s.lifetimeModel].formula}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    ΔTj、Tj_max、Tj_min、Tj_mean 由雨流计数结果自动推导，无需手动输入
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {MODEL_PARAMS_CONFIG[s.lifetimeModel].params.map((p) => (
+                      <Grid item xs={6} sm={3} key={p.key}>
+                        <TextField
+                          label={p.unit ? `${p.label} (${p.unit})` : p.label}
+                          size="small"
+                          fullWidth
+                          value={s.modelParamsInput[p.key] ?? p.defaultValue}
+                          onChange={(e) =>
+                            patch({
+                              modelParamsInput: {
+                                ...s.modelParamsInput,
+                                [p.key]: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </>
+              )}
+              <Button
+                variant="contained"
+                sx={{ mt: 2 }}
+                onClick={handleDamageCalc}
+                disabled={!s.tjSeries || s.loading}
+              >
+                计算寿命
+              </Button>
+            </Paper>
 
             {!s.result && (
               <Alert severity="info">请先输入数据并计算</Alert>
@@ -1376,14 +1283,7 @@ export const RainflowCounting: React.FC = () => {
                             label: '安全系数 f_safe',
                             value: String(s.result.damage.safety_factor),
                           }]
-                        : [{
-                            label: '等效定载循环数/块',
-                            value: s.result.damage.equivalent_cycles_per_block
-                              ? Number(
-                                  s.result.damage.equivalent_cycles_per_block,
-                                ).toFixed(1)
-                              : '-',
-                          }]),
+                        : []),
                       ...(s.result.damage.model_used
                         ? [{
                             label: '使用模型',
@@ -1436,37 +1336,20 @@ export const RainflowCounting: React.FC = () => {
                               <TableCell>{cd.damage.toExponential(3)}</TableCell>
                             </TableRow>
                           ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                )}
-
-                {/* ΔTj-mean-count table */}
-                {s.result.matrixRows && s.result.matrixRows.length > 0 && (
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      ΔTj — 平均结温 — 次数
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 400 }}>
-                      <Table size="small" stickyHeader>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>#</TableCell>
-                            <TableCell>ΔTj (°C)</TableCell>
-                            <TableCell>平均结温 (°C)</TableCell>
-                            <TableCell>次数</TableCell>
+                          {/* Total damage summary row */}
+                          <TableRow sx={{ '& td': { fontWeight: 'bold', borderTop: 2 } }}>
+                            <TableCell colSpan={3}>合计</TableCell>
+                            <TableCell>
+                              {s.result.modelDamage.cycle_details
+                                .reduce((sum, cd) => sum + cd.count, 0)}
+                            </TableCell>
+                            <TableCell>—</TableCell>
+                            <TableCell>
+                              {s.result.modelDamage.cycle_details
+                                .reduce((sum, cd) => sum + cd.damage, 0)
+                                .toExponential(3)}
+                            </TableCell>
                           </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {s.result.matrixRows.map((row, i) => (
-                            <TableRow key={i}>
-                              <TableCell>{i + 1}</TableCell>
-                              <TableCell>{row.delta_tj.toFixed(2)}</TableCell>
-                              <TableCell>{row.mean_tj.toFixed(2)}</TableCell>
-                              <TableCell>{row.count}</TableCell>
-                            </TableRow>
-                          ))}
                         </TableBody>
                       </Table>
                     </TableContainer>

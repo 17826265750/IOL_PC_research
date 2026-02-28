@@ -293,8 +293,6 @@ export interface RainflowResult {
   binCount?: number
   /** Backend summary statistics */
   summary?: Record<string, unknown>
-  /** Aggregated matrix rows from pipeline */
-  matrixRows?: Array<{ delta_tj: number; mean_tj: number; count: number }>
   /** Optional Miner damage output */
   damage?: Record<string, unknown> | null
   /** Thermal design summary (Tj_max, Tj_min, …) */

@@ -181,7 +181,7 @@ export const TimeHistoryInput: React.FC<Props> = ({ onDataSubmit }) => {
         <TabPanel value={tabValue} index={0}>
           <Stack spacing={2}>
             <TextField
-              label="输入温度数据（每行一个值，或用逗号分隔）"
+              label="输入数据（每行一个值，或用逗号分隔）"
               multiline
               rows={8}
               value={csvInput}

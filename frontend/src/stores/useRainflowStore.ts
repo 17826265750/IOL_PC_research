@@ -10,8 +10,6 @@ import type { RainflowResult } from '@/types'
 /* ---------- Types ---------- */
 export type InputMode = 'power' | 'tj'
 export type ZthMode = 'foster' | 'sampled'
-export type DamageMethod = 'life_curve' | 'model'
-
 export interface RainflowPageState {
   /* UI */
   tab: number
@@ -41,8 +39,6 @@ export interface RainflowPageState {
   rearrange: boolean
 
   /* Tab 2 — 寿命计算 */
-  damageMethod: DamageMethod
-  lifeCurveInput: string
   lifetimeModel: string
   modelParamsInput: Record<string, string>
   safetyFactor: string
@@ -91,8 +87,6 @@ const initialState: RainflowPageState = {
   ignoreBelow: '0',
   rearrange: false,
 
-  damageMethod: 'life_curve',
-  lifeCurveInput: '20,500000\n40,120000\n80,30000',
   lifetimeModel: 'coffin-manson',
   modelParamsInput: { A: '3.025e14', alpha: '5.039' },
   safetyFactor: '1.0',

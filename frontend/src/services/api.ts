@@ -338,9 +338,6 @@ class ApiService {
     yMin?: number
     yMax?: number
     ignoreBelow?: number
-    // Damage: life curve
-    lifeCurve?: Array<{ deltaTj: number; nf: number }>
-    referenceDeltaTj?: number
     // Damage: lifetime model
     lifetimeModel?: string
     modelParams?: Record<string, number>
@@ -368,12 +365,6 @@ class ApiService {
       y_min: data.yMin,
       y_max: data.yMax,
       ignore_below: data.ignoreBelow ?? 0,
-      // damage: life curve
-      life_curve: data.lifeCurve?.map((item) => ({
-        delta_tj: item.deltaTj,
-        nf: item.nf,
-      })),
-      reference_delta_tj: data.referenceDeltaTj,
       // damage: model
       lifetime_model: data.lifetimeModel,
       model_params: data.modelParams,
@@ -421,7 +412,6 @@ class ApiService {
         minRange: cycles.length > 0 ? Math.min(...cycles.map((c) => c.range)) : 0,
         binCount: data.binCount ?? 20,
         summary: backendData.summary ?? {},
-        matrixRows: backendData.matrix_rows ?? [],
         damage: backendData.damage ?? null,
         thermalSummary: backendData.thermal_summary ?? null,
         fromToMatrix: (backendData.from_to_matrix as any) ?? null,
