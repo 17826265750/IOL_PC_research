@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ThemeProvider, CssBaseline, Box } from '@mui/material'
+import { ThemeProvider, CssBaseline } from '@mui/material'
 
 import MainLayout from '@/components/Layout/MainLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -8,20 +8,10 @@ import {
   Home,
   ParameterFitting,
   Prediction,
-  Analysis,
   RainflowCounting,
-  DamageAccumulation,
-  RemainingLife
+  DamageAssessment,
 } from '@/pages'
 import theme from '@/theme/theme'
-
-// Placeholder pages - these will be implemented in subsequent tasks
-const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
-  <Box sx={{ p: 3 }}>
-    <h1>{title}</h1>
-    <p>This page is under development.</p>
-  </Box>
-)
 
 function App() {
   return (
@@ -35,11 +25,7 @@ function App() {
               <Route path="fitting" element={<ParameterFitting />} />
               <Route path="prediction" element={<Prediction />} />
               <Route path="rainflow" element={<RainflowCounting />} />
-              <Route path="damage" element={<DamageAccumulation />} />
-              <Route path="remaining" element={<RemainingLife />} />
-              <Route path="analysis" element={<Analysis />} />
-              <Route path="data" element={<PlaceholderPage title="数据管理" />} />
-              <Route path="settings" element={<PlaceholderPage title="设置" />} />
+              <Route path="damage" element={<DamageAssessment />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

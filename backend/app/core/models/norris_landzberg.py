@@ -22,6 +22,7 @@ Where:
 
 from typing import Dict, Any
 import logging
+import math
 
 from app.core.models.model_base import LifetimeModelBase
 
@@ -169,7 +170,7 @@ class NorrisLandzbergModel(LifetimeModelBase):
             freq_term = f ** beta
 
             # Arrhenius term (temperature acceleration)
-            arrhenius_factor = Ea / (BOLTZMANN_CONSTANT_EV_PER_K * Tj_max)
+            arrhenius_factor = math.exp(Ea / (BOLTZMANN_CONSTANT_EV_PER_K * Tj_max))
 
             # Combined model
             Nf = A * temp_term * freq_term * arrhenius_factor

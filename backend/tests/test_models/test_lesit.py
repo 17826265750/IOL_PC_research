@@ -456,14 +456,15 @@ class TestLESITEdgeCases:
         assert all(r == results[0] for r in results)
 
     def test_gas_constant_term_calculation(self):
-        """Verify the Q/(R*T) term is calculated correctly."""
+        """Verify the exp(Q/(R*T)) Arrhenius term is calculated correctly."""
+        import math
         model = LESITModel(A=1, alpha=0, Q_eV=1.0)
 
         result = model.calculate_cycles_to_failure(
             delta_Tj=1, Tj_min=300
         )
 
-        # Nf = A * (dTj)^0 * Q/(R*T) = 1 * 1 * (1.0 * 96485) / (8.314 * 300)
-        expected = (1.0 * 96485) / (8.314 * 300)
+        # Nf = A * (dTj)^0 * exp(Q/(R*T)) = 1 * 1 * exp((1.0 * 96485) / (8.314 * 300))
+        expected = math.exp((1.0 * 96485) / (8.314 * 300))
 
         assert result == pytest.approx(expected, rel=0.01)

@@ -242,20 +242,6 @@ class ApiService {
     return this.post('/prediction/predict', request)
   }
 
-  /**
-   * Get available lifetime models
-   */
-  async getModels() {
-    return this.get('/prediction/models')
-  }
-
-  /**
-   * Get default parameters for a model
-   */
-  async getModelDefaultParams(modelType: string) {
-    return this.get(`/prediction/models/${modelType}/defaults`)
-  }
-
   // ============================================
   // Rainflow Counting Endpoints
   // ============================================
@@ -435,105 +421,7 @@ class ApiService {
     return this.get(`/rainflow/results/${id}`)
   }
 
-  // ============================================
-  // Damage Accumulation Endpoints
-  // ============================================
 
-  /**
-   * Calculate cumulative damage using Miner's rule
-   */
-  async calculateDamage(request: {
-    modelType: string
-    params: Record<string, unknown>
-    cycles: Array<{
-      Tmax: number
-      Tmin: number
-      theating: number
-      count: number
-    }>
-  }) {
-    return this.post('/damage/calculate', request)
-  }
-
-  /**
-   * Get remaining life estimation
-   */
-  async getRemainingLife(damageResultId: string) {
-    return this.get(`/damage/remaining/${damageResultId}`)
-  }
-
-  // ============================================
-  // Analysis Endpoints
-  // ============================================
-
-  /**
-   * Perform sensitivity analysis
-   */
-  async performSensitivityAnalysis(request: {
-    modelType: string
-    baseParams: Record<string, unknown>
-    parametersToAnalyze: Array<{
-      name: string
-      variation: { min: number; max: number }
-      steps: number
-    }>
-  }) {
-    return this.post('/analysis/sensitivity', request)
-  }
-
-  /**
-   * Perform Weibull analysis
-   */
-  async performWeibullAnalysis(data: {
-    failures: number[]
-    censored?: number[]
-    confidenceLevel?: number
-  }) {
-    return this.post('/analysis/weibull', data)
-  }
-
-  // ============================================
-  // Data Management Endpoints
-  // ============================================
-
-  /**
-   * Upload experiment data file
-   */
-  async uploadExperimentData(file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-    return this.post('/data/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  }
-
-  /**
-   * Get all experiment data
-   */
-  async getExperimentData(page = 1, limit = 20) {
-    return this.get('/data/experiments', { params: { page, limit } })
-  }
-
-  /**
-   * Delete experiment data
-   */
-  async deleteExperimentData(id: string) {
-    return this.delete(`/data/experiments/${id}`)
-  }
-
-  /**
-   * Export data in specified format
-   */
-  async exportData(request: {
-    type: 'prediction' | 'rainflow' | 'damage' | 'analysis'
-    id: string
-    format: 'csv' | 'xlsx' | 'json' | 'pdf'
-    includeCharts?: boolean
-  }) {
-    return this.post('/data/export', request, {
-      responseType: 'blob',
-    })
-  }
 
   /**
    * Export prediction as PDF report
@@ -636,37 +524,7 @@ class ApiService {
     window.URL.revokeObjectURL(url)
   }
 
-  /**
-   * Get prediction history
-   */
-  async getPredictionHistory(page = 1, limit = 20) {
-    return this.get('/data/predictions', { params: { page, limit } })
-  }
 
-  // ============================================
-  // Settings Endpoints
-  // ============================================
-
-  /**
-   * Get application settings
-   */
-  async getSettings() {
-    return this.get('/settings')
-  }
-
-  /**
-   * Update application settings
-   */
-  async updateSettings(settings: Record<string, unknown>) {
-    return this.put('/settings', settings)
-  }
-
-  /**
-   * Reset settings to defaults
-   */
-  async resetSettings() {
-    return this.post('/settings/reset', {})
-  }
 }
 
 // Export singleton instance

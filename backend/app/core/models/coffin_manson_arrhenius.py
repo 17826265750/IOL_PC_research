@@ -20,6 +20,7 @@ Where:
 
 from typing import Dict, Any
 import logging
+import math
 
 from app.core.models.model_base import LifetimeModelBase
 
@@ -133,8 +134,8 @@ class CoffinMansonArrheniusModel(LifetimeModelBase):
         # Calculate cycles to failure
         try:
             # Arrhenius term
-            arrhenius_term = (Ea / (BOLTZMANN_CONSTANT_EV_PER_K * Tj_mean))
-            arrhenius_factor = arrhenius_term  # = Ea / (kB * Tj_mean)
+            arrhenius_term = Ea / (BOLTZMANN_CONSTANT_EV_PER_K * Tj_mean)
+            arrhenius_factor = math.exp(arrhenius_term)
 
             # Coffin-Manson term
             coffin_manson_factor = delta_Tj ** (-alpha)

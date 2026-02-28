@@ -20,10 +20,6 @@ import {
   Timeline as PredictionIcon,
   Waves as RainflowIcon,
   ShowChart as DamageIcon,
-  HourglassEmpty as RemainingLifeIcon,
-  Analytics as AnalysisIcon,
-  Folder as DataManagementIcon,
-  Settings as SettingsIcon,
   ChevronLeft as ChevronLeftIcon,
   Science as FittingIcon,
 } from '@mui/icons-material'
@@ -43,11 +39,7 @@ const menuItems: MenuItemType[] = [
   { id: 'fitting', label: '参数拟合', icon: FittingIcon, path: '/fitting' },
   { id: 'prediction', label: '寿命预测', icon: PredictionIcon, path: '/prediction' },
   { id: 'rainflow', label: '雨流计数', icon: RainflowIcon, path: '/rainflow' },
-  { id: 'damage', label: '累计损伤', icon: DamageIcon, path: '/damage' },
-  { id: 'remaining', label: '剩余寿命', icon: RemainingLifeIcon, path: '/remaining' },
-  { id: 'analysis', label: '参数分析', icon: AnalysisIcon, path: '/analysis' },
-  { id: 'data', label: '数据管理', icon: DataManagementIcon, path: '/data' },
-  { id: 'settings', label: '设置', icon: SettingsIcon, path: '/settings' },
+  { id: 'damage', label: '累计损伤与寿命', icon: DamageIcon, path: '/damage' },
 ]
 
 export const MainLayout: React.FC = () => {

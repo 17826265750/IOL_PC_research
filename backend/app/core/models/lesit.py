@@ -25,6 +25,7 @@ Note:
 
 from typing import Dict, Any
 import logging
+import math
 
 from app.core.models.model_base import LifetimeModelBase
 
@@ -173,7 +174,7 @@ class LESITModel(LifetimeModelBase):
 
             # Arrhenius term using minimum temperature
             arrhenius_term = Q_joule_per_mol / (GAS_CONSTANT * Tj_min)
-            arrhenius_factor = arrhenius_term  # = Q / (R * Tj_min)
+            arrhenius_factor = math.exp(arrhenius_term)
 
             # Combined model
             Nf = A * temp_swing_term * arrhenius_factor

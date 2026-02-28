@@ -349,31 +349,14 @@ async def predict_lifetime(request: Dict[str, Any]):
         cycles = request.get("cycles", [])
 
         # Map frontend parameter names to backend expected names
-        # Calculate delta_Tj from Tmax and Tmin
         Tmax = params.get("Tmax", 125)
         Tmin = params.get("Tmin", 40)
         delta_Tj = Tmax - Tmin
 
-        # Convert Tmax (°C) to Tj_max (Kelvin)
-        Tj_max = Tmax + 273.15
-
-        # Get heating time
-        t_on = params.get("theating", params.get("t_on", 60))
-
-        # Get CIPS 2008 specific parameters
-        I = params.get("I", 100)
-        V = params.get("V", 1200)
-        D = params.get("D", 300)
-
-        # Get model parameters (beta values) - Bayerer et al. 2008 typical values
-        # K needs to be fitted to specific device, using 1e17 as reasonable default
-        K = params.get("K", params.get("A", 1e17))
-        beta1 = params.get("beta1", params.get("n", -4.423))
-        beta2 = params.get("beta2", 1285)
-        beta3 = params.get("beta3", -0.462)
-        beta4 = params.get("beta4", -0.716)
-        beta5 = params.get("beta5", -0.761)
-        beta6 = params.get("beta6", -0.5)
+        # Common derived temperatures (Kelvin)
+        Tj_max_K = Tmax + 273.15
+        Tj_min_K = Tmin + 273.15
+        Tj_mean_K = (Tmax + Tmin) / 2.0 + 273.15
 
         # Map model type to backend format
         backend_model_type = model_type.replace("_", "-")
@@ -383,27 +366,62 @@ async def predict_lifetime(request: Dict[str, Any]):
         # Get the model
         model = ModelFactory.get_model(backend_model_type)
 
-        # Build parameters for model calculation
-        model_params = {
-            "delta_Tj": delta_Tj,
-            "Tj_max": Tj_max,
-            "t_on": t_on,
-            "I": I,
-            "V": V,
-            "D": D,
-            "K": K,
-            "beta1": beta1,
-            "beta2": beta2,
-            "beta3": beta3,
-            "beta4": beta4,
-            "beta5": beta5,
-            "beta6": beta6,
-        }
-
-        # Add other model-specific parameters
-        for key, value in params.items():
-            if key not in ["Tmax", "Tmin", "theating", "tcooling"]:
-                model_params[key] = value
+        # Build model-specific parameters
+        if backend_model_type == "cips-2008":
+            t_on = params.get("theating", params.get("t_on", 60))
+            model_params = {
+                "delta_Tj": delta_Tj,
+                "Tj_max": Tj_max_K,
+                "t_on": t_on,
+                "I": params.get("I", 100),
+                "V": params.get("V", 1200),
+                "D": params.get("D", 300),
+                "K": params.get("K", params.get("A", 1e17)),
+                "beta1": params.get("beta1", params.get("n", -4.423)),
+                "beta2": params.get("beta2", 1285),
+                "beta3": params.get("beta3", -0.462),
+                "beta4": params.get("beta4", -0.716),
+                "beta5": params.get("beta5", -0.761),
+                "beta6": params.get("beta6", -0.5),
+            }
+        elif backend_model_type == "coffin-manson":
+            model_params = {
+                "delta_Tj": delta_Tj,
+                "A": params.get("A", 3.025e14),
+                "alpha": params.get("alpha", 5.039),
+            }
+        elif backend_model_type == "coffin-manson-arrhenius":
+            model_params = {
+                "delta_Tj": delta_Tj,
+                "Tj_mean": Tj_mean_K,
+                "A": params.get("A", 3.025e14),
+                "alpha": params.get("alpha", 5.039),
+                "Ea": params.get("Ea", 0.8),
+            }
+        elif backend_model_type == "norris-landzberg":
+            model_params = {
+                "delta_Tj": delta_Tj,
+                "f": params.get("f", 6.0),
+                "Tj_max": Tj_max_K,
+                "A": params.get("A", 3.025e14),
+                "alpha": params.get("alpha", 5.039),
+                "beta": params.get("beta", -0.33),
+                "Ea": params.get("Ea", 0.8),
+            }
+        elif backend_model_type == "lesit":
+            model_params = {
+                "delta_Tj": delta_Tj,
+                "Tj_min": Tj_min_K,
+                "A": params.get("A", 3.025e14),
+                "alpha": params.get("alpha", -5.039),
+                "Q": params.get("Q", params.get("Ea", 0.8)),
+            }
+        else:
+            # Fallback: pass all params through
+            model_params = {"delta_Tj": delta_Tj}
+            for key, value in params.items():
+                if key not in ["Tmax", "Tmin", "theating", "tcooling"]:
+                    model_params[key] = value
 
         # Calculate cycles to failure
         cycles_to_failure = model.calculate_cycles_to_failure(**model_params)
@@ -458,7 +476,7 @@ async def predict_lifetime(request: Dict[str, Any]):
                 "deltaTj": delta_Tj,
                 "cycleResults": cycle_results,
                 "timestamp": datetime.now().isoformat(),
-                "TjMax": Tj_max,
+                "TjMax": Tj_max_K,
                 "inputParams": params,
             }
         }

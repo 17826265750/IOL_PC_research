@@ -1,7 +1,5 @@
 export { Home } from './Home'
 export { Prediction } from './Prediction'
-export { Analysis } from './Analysis'
 export { RainflowCounting } from './RainflowCounting'
-export { DamageAccumulation } from './DamageAccumulation'
-export { RemainingLife } from './RemainingLife'
+export { DamageAssessment } from './DamageAssessment'
 export { ParameterFitting } from './ParameterFitting'

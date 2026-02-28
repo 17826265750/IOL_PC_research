@@ -237,25 +237,29 @@ export const Prediction: React.FC = () => {
     if (!result) return
 
     try {
-      const blob = await apiService.exportData({
-        type: 'prediction',
-        id: result.modelType + '_' + Date.now(),
-        format,
-        includeCharts: true,
-      }) as unknown as Blob
+      const exportData = {
+        prediction: {
+          name: result.modelType,
+          model_type: result.modelType,
+          predicted_lifetime_cycles: result.predictedCycles,
+        },
+        parameters: params,
+      }
 
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `lifetime_prediction_${Date.now()}.${format === 'xlsx' ? 'xlsx' : format}`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      let resp: any
+      if (format === 'pdf') {
+        resp = await apiService.exportPredictionPDF(exportData)
+      } else {
+        resp = await apiService.exportPredictionExcel(exportData)
+      }
+
+      const blob = resp?.data instanceof Blob ? resp.data : new Blob([JSON.stringify(resp)], { type: 'application/json' })
+      const ext = format === 'xlsx' ? 'xlsx' : format
+      apiService.downloadBlob(blob, `lifetime_prediction_${Date.now()}.${ext}`)
     } catch (err) {
       console.error('Export failed:', err)
     }
-  }, [result])
+  }, [result, params])
 
   return (
     <Box>

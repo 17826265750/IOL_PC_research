@@ -15,9 +15,6 @@ import {
   Timeline as PredictionIcon,
   Waves as RainflowIcon,
   ShowChart as DamageIcon,
-  HourglassEmpty as RemainingLifeIcon,
-  Analytics as AnalysisIcon,
-  Folder as DataManagementIcon,
   ArrowForward as ArrowForwardIcon,
   Science as FittingIcon,
 } from '@mui/icons-material'
@@ -117,28 +114,12 @@ export const Home: React.FC = () => {
       color: 'success',
     },
     {
-      title: '累计损伤',
+      title: '损伤评估',
       description:
-        '基于Miner线性累计损伤理论，计算多工况条件下的累计损伤度和剩余寿命。',
+        '基于Miner线性累计损伤理论，计算多工况条件下的累计损伤度、剩余寿命和健康状态评估。',
       icon: DamageIcon,
       path: '/damage',
       color: 'warning',
-    },
-    {
-      title: '剩余寿命',
-      description:
-        '根据当前使用状态和累计损伤，预测功率器件的剩余使用寿命和可靠性评估。',
-      icon: RemainingLifeIcon,
-      path: '/remaining',
-      color: 'info',
-    },
-    {
-      title: '参数分析',
-      description:
-        '进行灵敏度分析、Weibull分析，深入理解各参数对寿命预测的影响。',
-      icon: AnalysisIcon,
-      path: '/analysis',
-      color: 'error',
     },
   ]
 
@@ -175,15 +156,13 @@ export const Home: React.FC = () => {
               快速开始
             </Typography>
             <Typography variant="body2" color="primary.contrastText" sx={{ opacity: 0.9 }}>
-              1. 在"数据管理"页面导入实验数据或手动输入温度循环参数
+              1. 在"参数拟合"页面导入实验数据并拟合模型参数
               <br />
-              2. 在"参数拟合"页面拟合模型参数并保存
+              2. 在"寿命预测"页面选择合适的寿命模型进行单条件寿命预测
               <br />
-              3. 在"寿命预测"页面选择合适的寿命模型进行预测
+              3. 在"雨流计数"页面对功耗时间序列进行热仿真与雨流循环分析
               <br />
-              4. 在"累计损伤"页面查看Miner累计损伤分析结果
-              <br />
-              5. 在"参数分析"页面进行灵敏度分析和参数优化
+              4. 在"损伤评估"页面定义任务剖面，计算Miner累计损伤与剩余寿命
             </Typography>
           </CardContent>
         </Card>
