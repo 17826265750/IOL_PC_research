@@ -25,7 +25,9 @@ from app.core.weibull import (
 from app.core.fitting import (
     fit_lifetime_model,
     fit_cips2008_model,
-    FittingResult
+    fit_general_model,
+    FittingResult,
+    FittingError
 )
 from app.core.sensitivity import (
     single_parameter_sensitivity,
@@ -477,6 +479,54 @@ async def fit_cips_model(request: Request) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"CIPS 2008 fitting failed: {str(e)}"
+        )
+
+
+@router.post("/fitting/model")
+async def fit_model_unified(request: Request) -> Dict[str, Any]:
+    """Unified model fitting endpoint for all supported lifetime models.
+
+    Request body:
+    - model_type: 'coffin_manson' | 'coffin_manson_arrhenius' | 'norris_landzberg' | 'lesit' | 'cips2008'
+    - experiment_data: List of experiment data points
+    - fixed_params: Optional dict of fixed parameter values
+    """
+    try:
+        body = await request.json()
+        model_type = body.get('model_type', 'cips2008')
+        experiment_data = body.get('experiment_data', [])
+        fixed_params = body.get('fixed_params')
+
+        result = fit_general_model(model_type, experiment_data, fixed_params)
+
+        response: Dict[str, Any] = {
+            "parameters": result.parameters,
+            "std_errors": result.std_errors,
+            "r_squared": float(result.r_squared),
+            "rmse": float(result.rmse),
+            "confidence_intervals": {
+                k: (
+                    float(v[0]) if v[0] is not None else None,
+                    float(v[1]) if v[1] is not None else None,
+                )
+                for k, v in result.confidence_intervals.items()
+            },
+            "fixed_params": getattr(result, 'fixed_params', None) or {},
+            "fixed_data_values": getattr(result, 'fixed_data_values', None) or {},
+            "auto_fixed_info": getattr(result, 'auto_fixed_info', None) or [],
+        }
+        return response
+
+    except FittingError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error fitting model: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Model fitting failed: {str(e)}",
         )
 
 

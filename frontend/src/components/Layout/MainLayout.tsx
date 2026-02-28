@@ -39,7 +39,7 @@ const menuItems: MenuItemType[] = [
   { id: 'fitting', label: '参数拟合', icon: FittingIcon, path: '/fitting' },
   { id: 'prediction', label: '寿命预测', icon: PredictionIcon, path: '/prediction' },
   { id: 'rainflow', label: '雨流计数', icon: RainflowIcon, path: '/rainflow' },
-  { id: 'damage', label: '累计损伤与寿命', icon: DamageIcon, path: '/damage' },
+  { id: 'damage', label: '累计损伤与剩余寿命评估', icon: DamageIcon, path: '/damage' },
 ]
 
 export const MainLayout: React.FC = () => {

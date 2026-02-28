@@ -132,6 +132,11 @@ interface DamageResult {
 }
 
 const FITTED_PARAMS_KEY = 'cips_fitted_parameters'
+const DA_MODEL_TYPE_KEY = 'da_model_type'
+const DA_MODEL_PARAMS_KEY = 'da_model_params'
+const DA_SAFETY_FACTOR_KEY = 'da_safety_factor'
+const DA_ROWS_KEY = 'da_rows'
+const DA_RESULT_KEY = 'da_result'
 
 let rowId = 1
 const makeRow = (): MissionRow => ({
@@ -149,18 +154,54 @@ const makeRow = (): MissionRow => ({
 /* ────────── Component ────────── */
 
 export const DamageAssessment: React.FC = () => {
-  const [modelType, setModelType] = useState<string>('cips2008')
+  const [modelType, setModelType] = useState<string>(() => {
+    return localStorage.getItem(DA_MODEL_TYPE_KEY) || 'cips2008'
+  })
   const [modelParams, setModelParams] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem(DA_MODEL_PARAMS_KEY)
+    if (saved) {
+      try { return JSON.parse(saved) } catch { /* ignore */ }
+    }
     const cfg = MODEL_PARAMS_CONFIG['cips2008']
     const d: Record<string, string> = {}
     cfg.params.forEach((p) => (d[p.key] = p.defaultValue))
     return d
   })
-  const [safetyFactor, setSafetyFactor] = useState('1.0')
-  const [rows, setRows] = useState<MissionRow[]>([makeRow()])
+  const [safetyFactor, setSafetyFactor] = useState(() => {
+    return localStorage.getItem(DA_SAFETY_FACTOR_KEY) || '1.0'
+  })
+  const [rows, setRows] = useState<MissionRow[]>(() => {
+    const saved = localStorage.getItem(DA_ROWS_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          rowId = Math.max(...parsed.map((r: MissionRow) => r.id), 0) + 1
+          return parsed
+        }
+      } catch { /* ignore */ }
+    }
+    return [makeRow()]
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<DamageResult | null>(null)
+  const [result, setResult] = useState<DamageResult | null>(() => {
+    const saved = localStorage.getItem(DA_RESULT_KEY)
+    if (saved) {
+      try { return JSON.parse(saved) } catch { /* ignore */ }
+    }
+    return null
+  })
+
+  /* Persist state to localStorage */
+  useEffect(() => { localStorage.setItem(DA_MODEL_TYPE_KEY, modelType) }, [modelType])
+  useEffect(() => { localStorage.setItem(DA_MODEL_PARAMS_KEY, JSON.stringify(modelParams)) }, [modelParams])
+  useEffect(() => { localStorage.setItem(DA_SAFETY_FACTOR_KEY, safetyFactor) }, [safetyFactor])
+  useEffect(() => { localStorage.setItem(DA_ROWS_KEY, JSON.stringify(rows)) }, [rows])
+  useEffect(() => {
+    if (result) localStorage.setItem(DA_RESULT_KEY, JSON.stringify(result))
+    else localStorage.removeItem(DA_RESULT_KEY)
+  }, [result])
 
   /* Try loading fitted params on mount */
   useEffect(() => {

@@ -64,9 +64,92 @@ interface FittingResult {
 const MODEL_OPTIONS: { value: LifetimeModelType; label: string }[] = [
   { value: 'cips2008', label: 'CIPS 2008 (Bayerer)' },
   { value: 'coffin_manson', label: 'Coffin-Manson' },
+  { value: 'coffin_manson_arrhenius', label: 'Coffin-Manson-Arrhenius' },
   { value: 'norris_landzberg', label: 'Norris-Landzberg' },
   { value: 'lesit', label: 'LESIT' },
 ]
+
+// Per-model fitting configuration
+type ColName = 'deltaTj' | 'Tjmax' | 'ton' | 'I' | 'V' | 'D'
+type FixedName = 'ton' | 'I' | 'V' | 'D'
+
+interface ModelFitCfg {
+  columns: ColName[]        // visible data columns (Nf always shown)
+  fixedParams: FixedName[]  // available fixed-parameter checkboxes
+  resultParams: string[]    // parameter names returned by fitting
+  paramCount: number        // total free params before fixing
+  formula: string
+}
+
+const MODEL_FIT_CFG: Record<string, ModelFitCfg> = {
+  coffin_manson: {
+    columns: ['deltaTj'],
+    fixedParams: [],
+    resultParams: ['A', 'alpha'],
+    paramCount: 2,
+    formula: 'Nf = A × (ΔTj)^α',
+  },
+  coffin_manson_arrhenius: {
+    columns: ['deltaTj', 'Tjmax'],
+    fixedParams: [],
+    resultParams: ['A', 'alpha', 'Ea'],
+    paramCount: 3,
+    formula: 'Nf = A × (ΔTj)^α × exp(Ea/(kB×Tj_mean))',
+  },
+  norris_landzberg: {
+    columns: ['deltaTj', 'Tjmax', 'ton'],
+    fixedParams: ['ton'],
+    resultParams: ['A', 'alpha', 'beta', 'Ea'],
+    paramCount: 4,
+    formula: 'Nf = A × (ΔTj)^α × f^β × exp(Ea/(kB×Tj_max))',
+  },
+  lesit: {
+    columns: ['deltaTj', 'Tjmax'],
+    fixedParams: [],
+    resultParams: ['A', 'alpha', 'Q'],
+    paramCount: 3,
+    formula: 'Nf = A × (ΔTj)^α × exp(Q/(R×Tj_min))',
+  },
+  cips2008: {
+    columns: ['deltaTj', 'Tjmax', 'ton', 'I', 'V', 'D'],
+    fixedParams: ['ton', 'I', 'V', 'D'],
+    resultParams: ['K', 'β1', 'β2', 'β3', 'β4', 'β5', 'β6'],
+    paramCount: 7,
+    formula: 'Nf = K × (ΔTj)^β1 × exp(β2/Tj_max) × ton^β3 × I^β4 × V^β5 × D^β6',
+  },
+}
+
+const COLUMN_LABELS: Record<ColName, { header: string; sub: string; unit: string; width: number }> = {
+  deltaTj: { header: 'ΔTj (K)', sub: '温度摆幅', unit: '', width: 90 },
+  Tjmax: { header: 'Tjmax (°C)', sub: '最高结温', unit: '', width: 90 },
+  ton: { header: 'ton (s)', sub: '加热时间', unit: '', width: 80 },
+  I: { header: 'I (A)', sub: '负载电流', unit: '', width: 80 },
+  V: { header: 'V (V)', sub: '阻断电压', unit: '', width: 90 },
+  D: { header: 'D (μm)', sub: '键合线直径', unit: '', width: 80 },
+}
+
+const FIXED_PARAM_LABELS: Record<FixedName, string> = {
+  ton: 'ton (s)',
+  I: 'I (A)',
+  V: 'V (V)',
+  D: 'D (μm)',
+}
+
+// Parameter display names for results
+const PARAM_DISPLAY: Record<string, { label: string; unit: string }> = {
+  K: { label: 'K', unit: '' },
+  A: { label: 'A', unit: '' },
+  alpha: { label: 'α', unit: '' },
+  beta: { label: 'β', unit: '' },
+  Ea: { label: 'Ea', unit: 'eV' },
+  Q: { label: 'Q', unit: 'eV' },
+  'β1': { label: 'β1', unit: '' },
+  'β2': { label: 'β2', unit: 'K' },
+  'β3': { label: 'β3', unit: '' },
+  'β4': { label: 'β4', unit: '' },
+  'β5': { label: 'β5', unit: '' },
+  'β6': { label: 'β6', unit: '' },
+}
 
 // Local storage key for fitted parameters
 const FITTED_PARAMS_KEY = 'cips_fitted_parameters'
@@ -206,26 +289,20 @@ export const ParameterFitting: React.FC = () => {
     localStorage.setItem(SELECTED_MODEL_KEY, selectedModel)
   }, [selectedModel])
 
-  // 计算最少需要的数据点数（7个参数 - 固定参数数量）
+  // Derived model config
+  const currentCfg = MODEL_FIT_CFG[selectedModel] || MODEL_FIT_CFG.cips2008
+  const visibleCols = currentCfg.columns
+  const availableFixed = currentCfg.fixedParams
+
+  // 计算最少需要的数据点数
   const getMinDataPoints = () => {
-    let fixedCount = 0
-    if (fixedParams.ton.enabled) fixedCount += 1
-    if (fixedParams.I.enabled) fixedCount += 1
-    if (fixedParams.V.enabled) fixedCount += 1
-    if (fixedParams.D.enabled) fixedCount += 1
-
-    const fittedParamCount = 7 - fixedCount
-
+    const fixedCount = availableFixed.filter((p) => fixedParams[p].enabled).length
+    const fittedParamCount = currentCfg.paramCount - fixedCount
     return Math.max(2, fittedParamCount)
   }
 
   const getReducedParamCount = () => {
-    let reducedCount = 0
-    if (fixedParams.ton.enabled) reducedCount += 1
-    if (fixedParams.I.enabled) reducedCount += 1
-    if (fixedParams.V.enabled) reducedCount += 1
-    if (fixedParams.D.enabled) reducedCount += 1
-    return reducedCount
+    return availableFixed.filter((p) => fixedParams[p].enabled).length
   }
 
   // 更新固定参数配置
@@ -274,12 +351,16 @@ export const ParameterFitting: React.FC = () => {
     setFittingResult(null)
 
     try {
-      // 准备固定参数（仅包含启用的固定参数）
+      // 准备固定参数
       const fixedParamsForApi: Record<string, number> = {}
-      if (fixedParams.ton.enabled) fixedParamsForApi['β3'] = -0.462  // 使用典型值
-      if (fixedParams.I.enabled) fixedParamsForApi['β4'] = -0.716
-      if (fixedParams.V.enabled) fixedParamsForApi['β5'] = -0.761
-      if (fixedParams.D.enabled) fixedParamsForApi['β6'] = -0.5
+      if (selectedModel === 'cips2008') {
+        if (fixedParams.ton.enabled) fixedParamsForApi['β3'] = -0.462
+        if (fixedParams.I.enabled) fixedParamsForApi['β4'] = -0.716
+        if (fixedParams.V.enabled) fixedParamsForApi['β5'] = -0.761
+        if (fixedParams.D.enabled) fixedParamsForApi['β6'] = -0.5
+      } else if (selectedModel === 'norris_landzberg') {
+        if (fixedParams.ton.enabled) fixedParamsForApi['beta'] = -0.33
+      }
 
       // Convert data to format expected by backend
       const data = experimentData.map(row => ({
@@ -292,10 +373,11 @@ export const ParameterFitting: React.FC = () => {
         Nf: row.Nf,
       }))
 
-      const response = await fetch('/api/analysis/fitting/cips2008', {
+      const response = await fetch('/api/analysis/fitting/model', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          model_type: selectedModel,
           experiment_data: data,
           fixed_params: Object.keys(fixedParamsForApi).length > 0 ? fixedParamsForApi : null,
         }),
@@ -322,20 +404,24 @@ export const ParameterFitting: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [experimentData, fixedParams])
+  }, [experimentData, fixedParams, selectedModel])
 
   const handleSaveParams = useCallback(() => {
     if (!fittingResult) return
 
     const paramsToSave: Record<string, number> = { ...fittingResult.parameters }
 
-    const fixedBetas = fittingResult.fixed_params ?? {}
-    ;['β3', 'β4', 'β5', 'β6'].forEach((betaKey) => {
-      if (betaKey in fixedBetas && !(betaKey in paramsToSave)) {
-        paramsToSave[betaKey] = 0
-      }
-    })
+    // For CIPS-2008: add fixed beta values and data values
+    if (selectedModel === 'cips2008') {
+      const fixedBetas = fittingResult.fixed_params ?? {}
+      ;['β3', 'β4', 'β5', 'β6'].forEach((betaKey) => {
+        if (betaKey in fixedBetas && !(betaKey in paramsToSave)) {
+          paramsToSave[betaKey] = 0
+        }
+      })
+    }
 
+    // Save fixed data values for all models
     const fixedDataValues = fittingResult.fixed_data_values ?? {}
     if (typeof fixedDataValues.ton === 'number') {
       paramsToSave.theating = fixedDataValues.ton
@@ -416,21 +502,38 @@ export const ParameterFitting: React.FC = () => {
   const getScatterOption = () => {
     if (!fittingResult || !fittingResult.parameters) return {}
 
-    const params = fittingResult.parameters
+    const p = fittingResult.parameters
+    const kB = 8.617e-5 // eV/K
+    const R = 8.314     // J/(mol·K)
     const observed = experimentData.map(d => d.Nf)
     const predicted = experimentData.map((row) => {
-      // Simple prediction using fitted parameters with null checks
-      const K = params.K ?? 1e10
-      const beta1 = params['β1'] ?? params.beta1 ?? -4.5
-      const beta2 = params['β2'] ?? params.beta2 ?? 1500
-      const beta3 = params['β3'] ?? params.beta3 ?? -0.5
-
-      return Math.exp(
-        Math.log(K) +
-        beta1 * Math.log(row.deltaTj || 1) +
-        beta2 / (row.Tjmax + 273.15) +
-        beta3 * Math.log(row.ton || 1)
-      )
+      const dTj = row.deltaTj || 1
+      const Tjmax_K = row.Tjmax + 273.15
+      try {
+        switch (selectedModel) {
+          case 'coffin_manson':
+            return (p.A ?? 1) * Math.pow(dTj, p.alpha ?? -5)
+          case 'coffin_manson_arrhenius': {
+            const Tm_K = row.Tjmax - dTj / 2 + 273.15
+            return (p.A ?? 1) * Math.pow(dTj, p.alpha ?? -5) * Math.exp((p.Ea ?? 0.8) / (kB * Tm_K))
+          }
+          case 'norris_landzberg': {
+            const f = 1 / (2 * (row.ton || 1))
+            return (p.A ?? 1) * Math.pow(dTj, p.alpha ?? -5) * Math.pow(f, p.beta ?? -0.33) * Math.exp((p.Ea ?? 0.8) / (kB * Tjmax_K))
+          }
+          case 'lesit': {
+            const Tmin_K = row.Tjmax - dTj + 273.15
+            const Q_J = (p.Q ?? 0.8) * 96485  // eV → J/mol
+            return (p.A ?? 1) * Math.pow(dTj, p.alpha ?? -5) * Math.exp(Q_J / (R * Tmin_K))
+          }
+          case 'cips2008':
+          default: {
+            const K = p.K ?? 1e10
+            const b1 = p['β1'] ?? -4.5, b2 = p['β2'] ?? 1500, b3 = p['β3'] ?? -0.5
+            return Math.exp(Math.log(K) + b1 * Math.log(dTj) + b2 / Tjmax_K + b3 * Math.log(row.ton || 1))
+          }
+        }
+      } catch { return 0 }
     })
 
     const allValues = [...observed, ...predicted].filter(v => v > 0 && isFinite(v))
@@ -529,42 +632,14 @@ export const ParameterFitting: React.FC = () => {
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 90 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">ΔTj (K)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">温度摆幅</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 90 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">Tjmax (°C)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">最高结温</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 80 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">ton (s)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">加热时间</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 80 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">I (A)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">负载电流</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 90 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">V (V)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">阻断电压</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 80 }}>
-                      <Box>
-                        <Typography variant="caption" fontWeight="bold">D (μm)</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">键合线直径</Typography>
-                      </Box>
-                    </TableCell>
+                    {visibleCols.map((col) => (
+                      <TableCell key={col} sx={{ minWidth: COLUMN_LABELS[col].width }}>
+                        <Box>
+                          <Typography variant="caption" fontWeight="bold">{COLUMN_LABELS[col].header}</Typography>
+                          <Typography variant="caption" display="block" color="text.secondary">{COLUMN_LABELS[col].sub}</Typography>
+                        </Box>
+                      </TableCell>
+                    ))}
                     <TableCell sx={{ minWidth: 100 }}>
                       <Box>
                         <Typography variant="caption" fontWeight="bold">Nf (cycles)</Typography>
@@ -577,64 +652,23 @@ export const ParameterFitting: React.FC = () => {
                 <TableBody>
                   {experimentData.map((row) => (
                     <TableRow key={row.id} hover>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={row.deltaTj}
-                          onChange={(e) => updateDataRow(row.id, 'deltaTj', parseFloat(e.target.value) || 0)}
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={row.Tjmax}
-                          onChange={(e) => updateDataRow(row.id, 'Tjmax', parseFloat(e.target.value) || 0)}
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={fixedParams.ton.enabled ? fixedParams.ton.value : row.ton}
-                          onChange={(e) => updateDataRow(row.id, 'ton', parseFloat(e.target.value) || 0)}
-                          disabled={fixedParams.ton.enabled}
-                          sx={{ width: 70 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={fixedParams.I.enabled ? fixedParams.I.value : row.I}
-                          onChange={(e) => updateDataRow(row.id, 'I', parseFloat(e.target.value) || 0)}
-                          disabled={fixedParams.I.enabled}
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={fixedParams.V.enabled ? fixedParams.V.value : row.V}
-                          onChange={(e) => updateDataRow(row.id, 'V', parseFloat(e.target.value) || 0)}
-                          disabled={fixedParams.V.enabled}
-                          sx={{ width: 90 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={fixedParams.D.enabled ? fixedParams.D.value : row.D}
-                          onChange={(e) => updateDataRow(row.id, 'D', parseFloat(e.target.value) || 0)}
-                          disabled={fixedParams.D.enabled}
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
+                      {visibleCols.map((col) => {
+                        const fpKey = col as keyof FixedParamConfig
+                        const fp = fixedParams[fpKey]
+                        const isFixed = (availableFixed as readonly string[]).includes(col) && fp?.enabled
+                        return (
+                          <TableCell key={col}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={isFixed ? fp.value : row[col as keyof ExperimentDataRow]}
+                              onChange={(e) => updateDataRow(row.id, col as keyof ExperimentDataRow, parseFloat(e.target.value) || 0)}
+                              disabled={!!isFixed}
+                              sx={{ width: COLUMN_LABELS[col].width - 10 }}
+                            />
+                          </TableCell>
+                        )
+                      })}
                       <TableCell>
                         <TextField
                           size="small"
@@ -665,36 +699,38 @@ export const ParameterFitting: React.FC = () => {
               </Alert>
             )}
 
-            {/* 固定参数配置 */}
-            <Paper sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
-              <Typography variant="subtitle2" gutterBottom>
-                固定参数配置 / Fixed Parameters
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                默认拟合全部参数；可按需固定部分参数以减少所需数据点
-              </Typography>
-              <Grid container spacing={2}>
-                {(['ton', 'I', 'V', 'D'] as const).map((param) => (
-                  <Grid item xs={6} sm={3} key={param}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Checkbox
-                        checked={fixedParams[param].enabled}
-                        onChange={() => toggleFixedParam(param)}
-                        size="small"
-                      />
-                      <TextField
-                        size="small"
-                        label={param === 'ton' ? 'ton (s)' : param === 'I' ? 'I (A)' : param === 'V' ? 'V (V)' : 'D (μm)'}
-                        value={fixedParams[param].value}
-                        onChange={(e) => updateFixedParamValue(param, parseFloat(e.target.value) || 0)}
-                        disabled={!fixedParams[param].enabled}
-                        sx={{ flex: 1, minWidth: 80 }}
-                      />
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Paper>
+            {/* 固定参数配置 - only show when model has fixable params */}
+            {availableFixed.length > 0 && (
+              <Paper sx={{ p: 2, mt: 2, bgcolor: 'action.hover' }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  固定参数配置 / Fixed Parameters
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                  默认拟合全部参数；可按需固定部分参数以减少所需数据点
+                </Typography>
+                <Grid container spacing={2}>
+                  {availableFixed.map((param) => (
+                    <Grid item xs={6} sm={3} key={param}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Checkbox
+                          checked={fixedParams[param].enabled}
+                          onChange={() => toggleFixedParam(param)}
+                          size="small"
+                        />
+                        <TextField
+                          size="small"
+                          label={FIXED_PARAM_LABELS[param]}
+                          value={fixedParams[param].value}
+                          onChange={(e) => updateFixedParamValue(param, parseFloat(e.target.value) || 0)}
+                          disabled={!fixedParams[param].enabled}
+                          sx={{ flex: 1, minWidth: 80 }}
+                        />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            )}
 
             <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -730,13 +766,13 @@ export const ParameterFitting: React.FC = () => {
                 • 当前需要至少 <strong>{getMinDataPoints()}</strong> 组试验数据（已约束/简化 {getReducedParamCount()} 个参数）
               </Typography>
               <Typography variant="body2" component="div">
-                • 主要变量: ΔTj (温度摆幅) 和 Tjmax (最高结温) 应有不同值
+                • 当前模型: {currentCfg.formula}
               </Typography>
-              <Typography variant="body2" component="div" color="text.secondary">
-                • 电压V输入芯片阻断电压等级（如600V、1200V、1700V）
+              <Typography variant="body2" component="div">
+                • 所需变量: {visibleCols.map(c => COLUMN_LABELS[c].header).join(', ')}, Nf
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                变量说明: ΔTj=温度摆幅(K), Tjmax=最高结温(°C), ton=加热时间(s), I=电流(A), V=阻断电压(V), D=键合线直径(μm), Nf=失效循环次数
+                变量说明: ΔTj=温度摆幅(K), Tjmax=最高结温(°C), ton=加热时间(s), Nf=失效循环次数
               </Typography>
             </Alert>
           </Paper>
@@ -793,33 +829,31 @@ export const ParameterFitting: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {/* K (已耦合固定项) */}
-                      {fittingResult.parameters?.K != null && (
-                        <TableRow sx={{ bgcolor: 'success.light' }}>
-                          <TableCell><strong>K</strong></TableCell>
-                          <TableCell><strong>{(fittingResult.parameters.K).toExponential(4)}</strong></TableCell>
-                          <TableCell>
-                            {fittingResult.confidence_intervals?.K && fittingResult.confidence_intervals.K[0] != null && fittingResult.confidence_intervals.K[1] != null
-                              ? `[${(fittingResult.confidence_intervals.K[0] as number).toExponential(2)}, ${(fittingResult.confidence_intervals.K[1] as number).toExponential(2)}]`
-                              : '-'}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {/* β 参数 */}
-                      {['β1', 'β2', 'β3', 'β4', 'β5', 'β6'].map((name) => {
+                      {currentCfg.resultParams.map((name) => {
                         const value = fittingResult.parameters?.[name]
                         if (value === undefined) return null
                         const ci = fittingResult.confidence_intervals?.[name]
                         const isFixed = fittingResult.fixed_params && name in fittingResult.fixed_params
+                        const display = PARAM_DISPLAY[name] || { label: name, unit: '' }
+                        const isScale = name === 'K' || name === 'A'
                         return (
-                          <TableRow key={name} sx={isFixed ? { bgcolor: 'action.selected' } : {}}>
-                            <TableCell>{name}</TableCell>
-                            <TableCell>{value.toFixed(4)}</TableCell>
+                          <TableRow key={name} sx={isScale ? { bgcolor: 'success.light' } : isFixed ? { bgcolor: 'action.selected' } : {}}>
+                            <TableCell>
+                              {isScale ? <strong>{display.label}</strong> : display.label}
+                              {display.unit && ` (${display.unit})`}
+                            </TableCell>
+                            <TableCell>
+                              {isScale
+                                ? <strong>{value.toExponential(4)}</strong>
+                                : value.toFixed(4)}
+                            </TableCell>
                             <TableCell>
                               {isFixed
                                 ? '固定'
                                 : ci && ci[0] != null && ci[1] != null
-                                  ? `[${ci[0].toFixed(4)}, ${ci[1].toFixed(4)}]`
+                                  ? isScale
+                                    ? `[${(ci[0] as number).toExponential(2)}, ${(ci[1] as number).toExponential(2)}]`
+                                    : `[${(ci[0] as number).toFixed(4)}, ${(ci[1] as number).toFixed(4)}]`
                                   : '-'}
                             </TableCell>
                           </TableRow>
@@ -830,14 +864,12 @@ export const ParameterFitting: React.FC = () => {
                 </TableContainer>
 
                 {/* 使用说明 */}
-                {fittingResult.parameters?.K != null && (
-                  <Alert severity="success" sx={{ mt: 2 }}>
-                    <Typography variant="caption">
-                      <strong>使用 K 进行预测:</strong> 在寿命预测页面输入 K 和拟合的 β1、β2 值，
-                      以及固定的 ton、I、V、D 值即可。
-                    </Typography>
-                  </Alert>
-                )}
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  <Typography variant="caption">
+                    <strong>拟合完成:</strong> 点击“保存参数”后可在寿命预测页面直接加载使用。
+                    当前模型: {currentCfg.formula}
+                  </Typography>
+                </Alert>
 
                 <Button
                   variant="contained"
@@ -856,10 +888,7 @@ export const ParameterFitting: React.FC = () => {
                   需要至少 <strong>{getMinDataPoints()}</strong> 组试验数据
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  当前: {experimentData.length} 组 | 已约束/简化参数: {getReducedParamCount()} 个
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                  变量: ΔTj, Tjmax, ton, I, V, D, Nf
+                  当前: {experimentData.length} 组 | 模型: {currentCfg.formula}
                 </Typography>
               </Alert>
             )}
@@ -873,11 +902,14 @@ export const ParameterFitting: React.FC = () => {
             {Object.keys(savedParams).length > 0 ? (
               Object.entries(savedParams).map(([model, params]) => {
                 const p = params as Record<string, number>
+                const cfg = MODEL_FIT_CFG[model]
+                const displayParams = cfg ? cfg.resultParams : Object.keys(p)
+                const modelLabel = MODEL_OPTIONS.find(o => o.value === model)?.label || model
                 return (
                   <Card key={model} sx={{ mb: 1 }}>
                     <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="subtitle2">{model}</Typography>
+                        <Typography variant="subtitle2">{modelLabel}</Typography>
                         <Button
                           size="small"
                           variant="outlined"
@@ -888,17 +920,14 @@ export const ParameterFitting: React.FC = () => {
                       </Box>
                       <Box sx={{ mt: 1 }}>
                         <Typography variant="caption" color="text.secondary" component="div">
-                          K: {p.K?.toExponential(2) || 'N/A'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" component="div">
-                          β1: {p['β1']?.toFixed(3) || p.beta1?.toFixed(3) || 'N/A'} |
-                          β2: {p['β2']?.toFixed(1) || p.beta2?.toFixed(1) || 'N/A'} |
-                          β3: {p['β3']?.toFixed(3) || p.beta3?.toFixed(3) || 'N/A'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" component="div">
-                          β4: {p['β4']?.toFixed(3) || p.beta4?.toFixed(3) || 'N/A'} |
-                          β5: {p['β5']?.toFixed(3) || p.beta5?.toFixed(3) || 'N/A'} |
-                          β6: {p['β6']?.toFixed(3) || p.beta6?.toFixed(3) || 'N/A'}
+                          {displayParams.map((pn) => {
+                            const disp = PARAM_DISPLAY[pn] || { label: pn, unit: '' }
+                            const v = p[pn]
+                            const formatted = v == null ? 'N/A'
+                              : (pn === 'K' || pn === 'A') ? v.toExponential(2)
+                              : v.toFixed(3)
+                            return `${disp.label}: ${formatted}`
+                          }).join(' | ')}
                         </Typography>
                       </Box>
                     </CardContent>
@@ -933,7 +962,7 @@ export const ParameterFitting: React.FC = () => {
               功率循环试验方案指南 / Power Cycling Experiment Guide
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              基于CIPS 2008 (Bayerer) 模型的参数拟合试验设计建议
+              基于{MODEL_OPTIONS.find(o => o.value === selectedModel)?.label || selectedModel}模型的参数拟合试验设计建议
             </Typography>
 
             <Grid container spacing={3}>
@@ -942,7 +971,7 @@ export const ParameterFitting: React.FC = () => {
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="subtitle2" color="primary" gutterBottom>
-                      CIPS 2008 模型公式 / Model Formula
+                      模型公式 / Model Formula
                     </Typography>
                     <Box sx={{
                       p: 2,
@@ -954,7 +983,7 @@ export const ParameterFitting: React.FC = () => {
                       border: 1,
                       borderColor: 'divider',
                     }}>
-                      N<sub>f</sub> = K × (ΔT<sub>j</sub>)<sup>β1</sup> × exp(β2/T<sub>j,max</sub>) × t<sub>on</sub><sup>β3</sup> × I<sup>β4</sup> × V<sup>β5</sup> × D<sup>β6</sup>
+                      {currentCfg.formula}
                     </Box>
                     <Alert severity="info" sx={{ mt: 2 }}>
                       <Typography variant="caption">

@@ -114,7 +114,7 @@ export const Home: React.FC = () => {
       color: 'success',
     },
     {
-      title: '损伤评估',
+      title: '累计损伤与剩余寿命评估',
       description:
         '基于Miner线性累计损伤理论，计算多工况条件下的累计损伤度、剩余寿命和健康状态评估。',
       icon: DamageIcon,
@@ -162,7 +162,7 @@ export const Home: React.FC = () => {
               <br />
               3. 在"雨流计数"页面对功耗时间序列进行热仿真与雨流循环分析
               <br />
-              4. 在"损伤评估"页面定义任务剖面，计算Miner累计损伤与剩余寿命
+              4. 在“累计损伤与剩余寿命评估”页面定义任务剖面，计算Miner累计损伤与剩余寿命
             </Typography>
           </CardContent>
         </Card>

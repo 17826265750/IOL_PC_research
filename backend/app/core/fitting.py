@@ -625,6 +625,332 @@ def fit_cips2008_model(
     return result
 
 
+# ============================================================
+# General model fitting (all supported models)
+# ============================================================
+
+_kB_eV = 8.617e-5   # Boltzmann constant in eV/K
+_R_gas = 8.314       # Gas constant in J/(mol·K)
+_eV_per_J_mol = 96485.0  # 1 eV/atom ≈ 96485 J/mol
+
+
+def fit_general_model(
+    model_type: str,
+    experiment_data: List[Dict],
+    fixed_params: Optional[Dict[str, float]] = None,
+) -> FittingResult:
+    """Unified fitting dispatcher for all supported lifetime models.
+
+    Args:
+        model_type: One of 'coffin_manson', 'coffin_manson_arrhenius',
+                    'norris_landzberg', 'lesit', 'cips2008'.
+        experiment_data: List of dicts with experiment data.
+        fixed_params: Optional fixed parameter values.
+    """
+    dispatch = {
+        'cips2008': lambda: fit_cips2008_model(experiment_data, fixed_params),
+        'coffin_manson': lambda: _fit_coffin_manson(experiment_data),
+        'coffin_manson_arrhenius': lambda: _fit_coffin_manson_arrhenius(experiment_data),
+        'norris_landzberg': lambda: _fit_norris_landzberg(experiment_data, fixed_params),
+        'lesit': lambda: _fit_lesit(experiment_data),
+    }
+    handler = dispatch.get(model_type)
+    if handler is None:
+        raise FittingError(f"Unknown model type: {model_type}")
+    return handler()
+
+
+def _build_linear_result(
+    log_result: FittingResult,
+    Nf_obs: np.ndarray,
+    Nf_pred: np.ndarray,
+    exp_map: Dict[str, str],
+    param_order: List[str],
+) -> FittingResult:
+    """Convert log-space FittingResult to linear-space.
+
+    Args:
+        log_result: Result from log-space fitting.
+        Nf_obs: Observed Nf (linear).
+        Nf_pred: Predicted Nf (linear).
+        exp_map: {log_name: linear_name} for params needing exp().
+        param_order: Final parameter name list.
+    """
+    p, ci, se = {}, {}, {}
+    inv_map = {v: k for k, v in exp_map.items()}
+    for name in param_order:
+        if name in inv_map:
+            log_name = inv_map[name]
+            raw = log_result.parameters[log_name]
+            p[name] = float(np.exp(raw))
+            if log_name in log_result.confidence_intervals:
+                c = log_result.confidence_intervals[log_name]
+                ci[name] = (float(np.exp(c[0])), float(np.exp(c[1])))
+            if log_name in log_result.std_errors and log_result.std_errors[log_name] is not None:
+                se[name] = float(p[name] * log_result.std_errors[log_name])
+        elif name in log_result.parameters:
+            p[name] = float(log_result.parameters[name])
+            if name in log_result.confidence_intervals:
+                ci[name] = tuple(float(v) for v in log_result.confidence_intervals[name])
+            if name in log_result.std_errors and log_result.std_errors[name] is not None:
+                se[name] = float(log_result.std_errors[name])
+    return FittingResult(
+        parameters=p, std_errors=se,
+        r_squared=float(calculate_r_squared(Nf_obs, Nf_pred)),
+        rmse=float(calculate_rmse(Nf_obs, Nf_pred)),
+        residuals=Nf_obs - Nf_pred,
+        covariance=log_result.covariance,
+        confidence_intervals=ci,
+    )
+
+
+def _fit_coffin_manson(experiment_data: List[Dict]) -> FittingResult:
+    """Fit Coffin-Manson: Nf = A * (ΔTj)^alpha  (alpha < 0)."""
+    if not experiment_data or len(experiment_data) < 2:
+        raise FittingError("Coffin-Manson fitting requires at least 2 data points")
+    try:
+        dTj = np.array([d['dTj'] for d in experiment_data], dtype=float)
+        Nf = np.array([d['Nf'] for d in experiment_data], dtype=float)
+    except KeyError as e:
+        raise FittingError(f"Missing field: {e}")
+    if np.any(dTj <= 0) or np.any(Nf <= 0):
+        raise FittingError("dTj and Nf must be strictly positive")
+
+    ln_dTj = np.log(dTj)
+    ln_Nf = np.log(Nf)
+
+    def model(X, ln_A, alpha):
+        return ln_A + alpha * ln_dTj
+
+    log_result = fit_lifetime_model(
+        model, np.arange(len(Nf)), ln_Nf,
+        {'ln_A': float(np.mean(ln_Nf)), 'alpha': -5.0},
+    )
+    A = float(np.exp(log_result.parameters['ln_A']))
+    alpha = float(log_result.parameters['alpha'])
+    Nf_pred = A * (dTj ** alpha)
+    return _build_linear_result(log_result, Nf, Nf_pred, {'ln_A': 'A'}, ['A', 'alpha'])
+
+
+def _fit_coffin_manson_arrhenius(experiment_data: List[Dict]) -> FittingResult:
+    """Fit CMA: Nf = A * (ΔTj)^alpha * exp(Ea / (kB * Tj_mean_K))."""
+    if not experiment_data or len(experiment_data) < 3:
+        raise FittingError("CMA fitting requires at least 3 data points")
+    try:
+        dTj = np.array([d['dTj'] for d in experiment_data], dtype=float)
+        Tj_max = np.array([d['Tj_max'] for d in experiment_data], dtype=float)
+        Nf = np.array([d['Nf'] for d in experiment_data], dtype=float)
+    except KeyError as e:
+        raise FittingError(f"Missing field: {e}")
+    if np.any(dTj <= 0) or np.any(Nf <= 0):
+        raise FittingError("dTj and Nf must be strictly positive")
+
+    Tj_mean_K = Tj_max - dTj / 2.0 + 273.15
+    if np.any(Tj_mean_K <= 0):
+        raise FittingError("Derived Tj_mean in Kelvin must be positive")
+
+    ln_dTj = np.log(dTj)
+    ln_Nf = np.log(Nf)
+    inv_Tj = 1.0 / Tj_mean_K
+
+    def model(X, ln_A, alpha, Ea_kB):
+        return ln_A + alpha * ln_dTj + Ea_kB * inv_Tj
+
+    log_result = fit_lifetime_model(
+        model, np.arange(len(Nf)), ln_Nf,
+        {'ln_A': float(np.mean(ln_Nf)), 'alpha': -5.0, 'Ea_kB': 9000.0},
+        {'ln_A': (-200, 200), 'alpha': (-15, 0), 'Ea_kB': (0, 50000)},
+    )
+    A = float(np.exp(log_result.parameters['ln_A']))
+    alpha = float(log_result.parameters['alpha'])
+    Ea_kB = float(log_result.parameters['Ea_kB'])
+    Ea = Ea_kB * _kB_eV  # convert back to eV
+
+    Nf_pred = A * (dTj ** alpha) * np.exp(Ea / (_kB_eV * Tj_mean_K))
+
+    # Build result with unit conversion for Ea
+    p = {'A': A, 'alpha': alpha, 'Ea': float(Ea)}
+    ci, se = {}, {}
+    if 'ln_A' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['ln_A']
+        ci['A'] = (float(np.exp(c[0])), float(np.exp(c[1])))
+    if 'ln_A' in log_result.std_errors and log_result.std_errors['ln_A'] is not None:
+        se['A'] = float(A * log_result.std_errors['ln_A'])
+    if 'alpha' in log_result.confidence_intervals:
+        ci['alpha'] = tuple(float(v) for v in log_result.confidence_intervals['alpha'])
+    if 'alpha' in log_result.std_errors and log_result.std_errors['alpha'] is not None:
+        se['alpha'] = float(log_result.std_errors['alpha'])
+    if 'Ea_kB' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['Ea_kB']
+        ci['Ea'] = (float(c[0] * _kB_eV), float(c[1] * _kB_eV))
+    if 'Ea_kB' in log_result.std_errors and log_result.std_errors['Ea_kB'] is not None:
+        se['Ea'] = float(log_result.std_errors['Ea_kB'] * _kB_eV)
+
+    return FittingResult(
+        parameters=p, std_errors=se,
+        r_squared=float(calculate_r_squared(Nf, Nf_pred)),
+        rmse=float(calculate_rmse(Nf, Nf_pred)),
+        residuals=Nf - Nf_pred, covariance=log_result.covariance,
+        confidence_intervals=ci,
+    )
+
+
+def _fit_norris_landzberg(
+    experiment_data: List[Dict],
+    fixed_params: Optional[Dict[str, float]] = None,
+) -> FittingResult:
+    """Fit N-L: Nf = A * (ΔTj)^alpha * f^beta * exp(Ea / (kB * Tj_max_K))."""
+    if not experiment_data or len(experiment_data) < 3:
+        raise FittingError("Norris-Landzberg fitting requires at least 3 data points")
+    try:
+        dTj = np.array([d['dTj'] for d in experiment_data], dtype=float)
+        Tj_max = np.array([d['Tj_max'] for d in experiment_data], dtype=float)
+        t_on = np.array([d['t_on'] for d in experiment_data], dtype=float)
+        Nf = np.array([d['Nf'] for d in experiment_data], dtype=float)
+    except KeyError as e:
+        raise FittingError(f"Missing field: {e}")
+    if np.any(dTj <= 0) or np.any(Nf <= 0) or np.any(t_on <= 0):
+        raise FittingError("dTj, t_on, and Nf must be strictly positive")
+
+    f = 1.0 / (2.0 * t_on)
+    Tj_max_K = Tj_max + 273.15
+    ln_dTj = np.log(dTj)
+    ln_f = np.log(f)
+    ln_Nf = np.log(Nf)
+
+    # If frequency is constant, fix beta
+    fix_beta = False
+    fixed_beta_val = -0.33
+    if fixed_params and 'beta' in fixed_params:
+        fix_beta = True
+        fixed_beta_val = fixed_params['beta']
+    elif np.allclose(t_on, t_on[0]):
+        fix_beta = True
+
+    auto_info = []
+    fixed_info = {}
+
+    if fix_beta:
+        def model(X, ln_A, alpha, Ea_kB):
+            return ln_A + alpha * ln_dTj + fixed_beta_val * ln_f + Ea_kB / Tj_max_K
+        initial = {'ln_A': float(np.mean(ln_Nf)), 'alpha': -5.0, 'Ea_kB': 9000.0}
+        bounds = {'ln_A': (-200, 200), 'alpha': (-15, 0), 'Ea_kB': (0, 50000)}
+        fixed_info['beta'] = fixed_beta_val
+        if not (fixed_params and 'beta' in fixed_params):
+            auto_info.append(f"频率f为常值，β自动固定为 {fixed_beta_val}")
+    else:
+        def model(X, ln_A, alpha, beta, Ea_kB):
+            return ln_A + alpha * ln_dTj + beta * ln_f + Ea_kB / Tj_max_K
+        initial = {'ln_A': float(np.mean(ln_Nf)), 'alpha': -5.0, 'beta': -0.33, 'Ea_kB': 9000.0}
+        bounds = {'ln_A': (-200, 200), 'alpha': (-15, 0), 'beta': (-5, 5), 'Ea_kB': (0, 50000)}
+
+    log_result = fit_lifetime_model(
+        model, np.arange(len(Nf)), ln_Nf, initial, bounds,
+    )
+
+    A = float(np.exp(log_result.parameters['ln_A']))
+    alpha = float(log_result.parameters['alpha'])
+    beta = fixed_beta_val if fix_beta else float(log_result.parameters['beta'])
+    Ea_kB = float(log_result.parameters['Ea_kB'])
+    Ea = Ea_kB * _kB_eV
+
+    Nf_pred = A * (dTj ** alpha) * (f ** beta) * np.exp(Ea / (_kB_eV * Tj_max_K))
+
+    p = {'A': A, 'alpha': alpha, 'beta': float(beta), 'Ea': float(Ea)}
+    ci, se = {}, {}
+    if 'ln_A' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['ln_A']
+        ci['A'] = (float(np.exp(c[0])), float(np.exp(c[1])))
+    if 'ln_A' in log_result.std_errors and log_result.std_errors['ln_A'] is not None:
+        se['A'] = float(A * log_result.std_errors['ln_A'])
+    for pname in ['alpha'] + ([] if fix_beta else ['beta']):
+        if pname in log_result.confidence_intervals:
+            ci[pname] = tuple(float(v) for v in log_result.confidence_intervals[pname])
+        if pname in log_result.std_errors and log_result.std_errors[pname] is not None:
+            se[pname] = float(log_result.std_errors[pname])
+    if 'Ea_kB' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['Ea_kB']
+        ci['Ea'] = (float(c[0] * _kB_eV), float(c[1] * _kB_eV))
+    if 'Ea_kB' in log_result.std_errors and log_result.std_errors['Ea_kB'] is not None:
+        se['Ea'] = float(log_result.std_errors['Ea_kB'] * _kB_eV)
+
+    out = FittingResult(
+        parameters=p, std_errors=se,
+        r_squared=float(calculate_r_squared(Nf, Nf_pred)),
+        rmse=float(calculate_rmse(Nf, Nf_pred)),
+        residuals=Nf - Nf_pred, covariance=log_result.covariance,
+        confidence_intervals=ci,
+    )
+    out.fixed_params = fixed_info
+    out.auto_fixed_info = auto_info
+    if np.allclose(t_on, t_on[0]):
+        out.fixed_data_values = {'ton': float(t_on[0])}
+    return out
+
+
+def _fit_lesit(experiment_data: List[Dict]) -> FittingResult:
+    """Fit LESIT: Nf = A * (ΔTj)^alpha * exp(Q / (R * Tj_min_K))."""
+    if not experiment_data or len(experiment_data) < 3:
+        raise FittingError("LESIT fitting requires at least 3 data points")
+    try:
+        dTj = np.array([d['dTj'] for d in experiment_data], dtype=float)
+        Tj_max = np.array([d['Tj_max'] for d in experiment_data], dtype=float)
+        Nf = np.array([d['Nf'] for d in experiment_data], dtype=float)
+    except KeyError as e:
+        raise FittingError(f"Missing field: {e}")
+    if np.any(dTj <= 0) or np.any(Nf <= 0):
+        raise FittingError("dTj and Nf must be strictly positive")
+
+    Tj_min_K = Tj_max - dTj + 273.15
+    if np.any(Tj_min_K <= 0):
+        raise FittingError("Derived Tj_min in Kelvin must be positive")
+
+    ln_dTj = np.log(dTj)
+    ln_Nf = np.log(Nf)
+    inv_Tj = 1.0 / Tj_min_K
+
+    def model(X, ln_A, alpha, Q_R):
+        return ln_A + alpha * ln_dTj + Q_R * inv_Tj
+
+    log_result = fit_lifetime_model(
+        model, np.arange(len(Nf)), ln_Nf,
+        {'ln_A': float(np.mean(ln_Nf)), 'alpha': -5.0, 'Q_R': 9000.0},
+        {'ln_A': (-200, 200), 'alpha': (-15, 0), 'Q_R': (0, 50000)},
+    )
+    A = float(np.exp(log_result.parameters['ln_A']))
+    alpha = float(log_result.parameters['alpha'])
+    Q_R = float(log_result.parameters['Q_R'])
+    Q_eV = Q_R * _R_gas / _eV_per_J_mol  # Q/R * R / (eV→J/mol) = Q in eV
+
+    Nf_pred = A * (dTj ** alpha) * np.exp(Q_R / Tj_min_K)
+
+    p = {'A': A, 'alpha': alpha, 'Q': float(Q_eV)}
+    ci, se = {}, {}
+    if 'ln_A' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['ln_A']
+        ci['A'] = (float(np.exp(c[0])), float(np.exp(c[1])))
+    if 'ln_A' in log_result.std_errors and log_result.std_errors['ln_A'] is not None:
+        se['A'] = float(A * log_result.std_errors['ln_A'])
+    if 'alpha' in log_result.confidence_intervals:
+        ci['alpha'] = tuple(float(v) for v in log_result.confidence_intervals['alpha'])
+    if 'alpha' in log_result.std_errors and log_result.std_errors['alpha'] is not None:
+        se['alpha'] = float(log_result.std_errors['alpha'])
+    q_factor = _R_gas / _eV_per_J_mol
+    if 'Q_R' in log_result.confidence_intervals:
+        c = log_result.confidence_intervals['Q_R']
+        ci['Q'] = (float(c[0] * q_factor), float(c[1] * q_factor))
+    if 'Q_R' in log_result.std_errors and log_result.std_errors['Q_R'] is not None:
+        se['Q'] = float(log_result.std_errors['Q_R'] * q_factor)
+
+    return FittingResult(
+        parameters=p, std_errors=se,
+        r_squared=float(calculate_r_squared(Nf, Nf_pred)),
+        rmse=float(calculate_rmse(Nf, Nf_pred)),
+        residuals=Nf - Nf_pred, covariance=log_result.covariance,
+        confidence_intervals=ci,
+    )
+
+
 def weighted_fit(
     model_func: Callable,
     x_data: np.ndarray,
