@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/React-18-blue.svg" alt="React">
   <img src="https://img.shields.io/badge/FastAPI-0.115-green.svg" alt="FastAPI">
   <img src="https://img.shields.io/badge/MUI-5.x-purple.svg" alt="MUI">
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg" alt="Docker">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
   <img src="https://img.shields.io/badge/Tests-555+-brightgreen.svg" alt="Tests">
 </p>
@@ -25,6 +26,7 @@
   - [雨流计数法](#雨流计数法)
   - [Miner线性损伤累积](#miner线性损伤累积)
   - [Weibull可靠性分析](#weibull可靠性分析)
+- [快速部署 (Docker)](#快速部署-docker)
 - [安装教程](#安装教程)
 - [使用教程](#使用教程)
 - [API参考](#api参考)
@@ -564,6 +566,101 @@ $$\ln(N_f) = \ln(K) + \beta_1 \ln(\Delta T_j) + \frac{\beta_2}{T_{j,max}} + \bet
 
 ---
 
+## 快速部署 (Docker)
+
+### 环境要求
+
+| 组件 | 版本要求 |
+|-----|---------|
+| Docker | ≥ 20.10 |
+| Docker Compose | ≥ 2.0 |
+
+### 一键部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/your-repo/IOL_PC_research.git
+cd IOL_PC_research
+
+# 2. 构建并启动服务
+docker-compose up -d --build
+
+# 3. 查看服务状态
+docker-compose ps
+```
+
+### 访问地址
+
+| 服务 | 地址 |
+|------|------|
+| **前端界面** | http://localhost |
+| **API 文档 (Swagger)** | http://localhost:80/api/docs |
+| **API 文档 (ReDoc)** | http://localhost:80/api/redoc |
+
+### 常用命令
+
+```bash
+# 查看日志
+docker-compose logs -f
+
+# 查看后端日志
+docker-compose logs -f backend
+
+# 查看前端日志
+docker-compose logs -f frontend
+
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 重新构建
+docker-compose up -d --build
+
+# 进入后端容器
+docker exec -it iol-backend /bin/bash
+```
+
+### 数据持久化
+
+数据存储在 Docker volume 中，可通过以下命令管理：
+
+```bash
+# 查看数据卷
+docker volume ls
+
+# 备份数据
+docker run --rm -v iol_pc_research-data:/data -v $(pwd):/backup alpine tar czf /backup/backup-$(date +%Y%m%d).tar.gz /data
+
+# 清理所有容器和数据卷（谨慎使用）
+docker-compose down -v
+```
+
+### 生产环境部署
+
+生产环境部署建议：
+
+1. **修改环境变量**
+   ```bash
+   cd backend
+   cp .env.example .env
+   # 编辑 .env 文件，修改 SECRET_KEY 等敏感配置
+   ```
+
+2. **配置 HTTPS**
+   - 使用 Let's Encrypt 获取免费证书
+   - 修改 `frontend/nginx.conf` 添加 SSL 配置
+
+3. **安全加固**
+   - 修改 `SECRET_KEY` 为随机字符串
+   - 配置防火墙，仅开放 80/443 端口
+   - 启用 HTTPS 强制跳转
+
+详细部署文档请参考 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+---
+
 ## 安装教程
 
 ### 环境要求
@@ -969,6 +1066,9 @@ IOL_PC_research/
 │   │   ├── test_models/             # 寿命模型测试
 │   │   ├── test_core/               # 核心算法测试
 │   │   └── test_api/                # API测试
+│   ├── Dockerfile                   # 后端Docker配置
+│   ├── .dockerignore
+│   ├── .env.example                 # 环境变量模板
 │   ├── requirements.txt
 │   └── run.py
 │
@@ -991,9 +1091,15 @@ IOL_PC_research/
 │   │   ├── services/                # API服务
 │   │   ├── stores/                  # Zustand状态
 │   │   └── types/                   # TypeScript类型
+│   ├── Dockerfile                   # 前端Docker配置
+│   ├── nginx.conf                   # Nginx配置
+│   ├── .dockerignore
+│   ├── .env.production              # 生产环境变量
 │   ├── package.json
 │   └── vite.config.ts
 │
+├── docker-compose.yml               # Docker编排配置
+├── DEPLOYMENT.md                    # 详细部署文档
 └── README.md
 ```
 
