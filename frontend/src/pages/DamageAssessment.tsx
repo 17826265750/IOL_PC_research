@@ -1,3 +1,7 @@
+/**
+ * 功率模块寿命分析软件 - 累计损伤评估页面
+ * @author GSH
+ */
 import React, { useState, useCallback, useEffect } from 'react'
 import {
   Box,

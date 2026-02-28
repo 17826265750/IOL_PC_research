@@ -1,5 +1,8 @@
 """
-FastAPI application entry point for CIPS 2008 Lifetime Prediction.
+FastAPI application entry point for Power Module Lifetime Analysis Software.
+
+功率模块寿命分析软件 - 后端API入口
+Author: GSH
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +21,7 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
-    logger.info("Starting CIPS 2008 Lifetime Prediction API")
+    logger.info("Starting 功率模块寿命分析软件 API")
 
     # Initialize database
     try:
@@ -37,13 +40,13 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down CIPS 2008 Lifetime Prediction API")
+    logger.info("Shutting down 功率模块寿命分析软件 API")
 
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Backend API for IOL PC board lifetime prediction using CIPS 2008 standard",
+    description="功率模块寿命分析软件后端API - 基于CIPS 2008标准的IGBT功率模块寿命预测 (Author: GSH)",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -125,7 +128,8 @@ async def health_check():
 async def root():
     """Root endpoint."""
     return {
-        "message": "CIPS 2008 IOL Lifetime Prediction API",
+        "message": "功率模块寿命分析软件 API",
+        "author": "GSH",
         "version": settings.app_version,
         "docs": "/api/docs",
         "endpoints": {

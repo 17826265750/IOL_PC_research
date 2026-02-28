@@ -1,3 +1,7 @@
+/**
+ * 功率模块寿命分析软件 - 参数拟合页面
+ * @author GSH
+ */
 import React, { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {

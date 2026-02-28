@@ -1,9 +1,13 @@
+/**
+ * 功率模块寿命分析软件 - API服务层
+ * @author GSH
+ */
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ApiResponse } from '@/types'
 
 /**
  * API Service for backend communication
- * Handles all HTTP requests to the CIPS 2008 backend
+ * Handles all HTTP requests to the backend
  */
 
 /**

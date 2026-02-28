@@ -1,6 +1,9 @@
 """
 Experiment data CRUD endpoints.
 
+功率模块寿命分析软件 - 实验数据管理API
+Author: GSH
+
 Provides endpoints for:
 - Creating experiment records
 - Reading experiment data

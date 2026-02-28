@@ -1,6 +1,9 @@
 """
 Prediction endpoints for lifetime calculation.
 
+功率模块寿命分析软件 - 寿命预测API
+Author: GSH
+
 Provides endpoints for:
 - Single lifetime prediction
 - Multiple model comparison

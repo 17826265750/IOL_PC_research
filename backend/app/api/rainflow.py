@@ -1,6 +1,9 @@
 """
 Rainflow cycle counting endpoints.
 
+功率模块寿命分析软件 - 雨流计数API
+Author: GSH
+
 Provides endpoints for:
 - Rainflow cycle counting from time-series data
 - Histogram generation

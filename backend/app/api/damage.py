@@ -1,6 +1,9 @@
 """
 Damage accumulation endpoints.
 
+功率模块寿命分析软件 - 损伤累积API
+Author: GSH
+
 Provides endpoints for:
 - Miner's rule damage calculation
 - S-N curve based lifetime prediction

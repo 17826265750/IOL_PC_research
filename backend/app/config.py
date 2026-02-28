@@ -1,5 +1,8 @@
 """
 Configuration settings using Pydantic BaseSettings.
+
+功率模块寿命分析软件 - 配置模块
+Author: GSH
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
@@ -7,16 +10,16 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     """Application configuration settings."""
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
     )
-    
+
     # Application
-    app_name: str = "CIPS 2008 IOL Lifetime Prediction"
+    app_name: str = "功率模块寿命分析软件"
     app_version: str = "1.0.0"
     debug: bool = True
     

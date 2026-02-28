@@ -1,3 +1,7 @@
+/**
+ * 功率模块寿命分析软件 - 首页
+ * @author GSH
+ */
 import React from 'react'
 import {
   Box,
@@ -127,7 +131,7 @@ export const Home: React.FC = () => {
     <Container maxWidth="xl">
       <Box sx={{ mb: 6 }}>
         <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
-          CIPS 2008 寿命预测软件
+          功率模块寿命分析软件
         </Typography>
         <Typography variant="body1" color="text.secondary" paragraph>
           专业功率器件寿命预测分析平台，支持多种主流寿命模型和全面的可靠性评估。

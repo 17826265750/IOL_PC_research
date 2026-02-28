@@ -1,6 +1,9 @@
 """
 Export endpoints for generating reports and data exports.
 
+功率模块寿命分析软件 - 导出API
+Author: GSH
+
 Provides endpoints for:
 - PDF report generation with charts and tables
 - Excel data export with multiple sheets

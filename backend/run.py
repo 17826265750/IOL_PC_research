@@ -1,5 +1,8 @@
 """
-Entry point for the CIPS 2008 Lifetime Prediction Backend.
+Entry point for the Power Module Lifetime Analysis Backend.
+
+功率模块寿命分析软件 - 后端启动入口
+Author: GSH
 """
 import uvicorn
 from app.main import app

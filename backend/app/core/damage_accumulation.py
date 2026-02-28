@@ -1,6 +1,9 @@
 """
 Linear damage accumulation using Miner's rule.
 
+功率模块寿命分析软件 - 线性损伤累积模块
+Author: GSH
+
 Total damage = Σ (n_i / N_i) where failure occurs when damage >= 1
 
 This module implements the Palmgren-Miner linear damage hypothesis,

@@ -1,3 +1,7 @@
+/**
+ * 功率模块寿命分析软件 - 主布局组件
+ * @author GSH
+ */
 import React, { useState } from 'react'
 import {
   AppBar,
@@ -76,7 +80,7 @@ export const MainLayout: React.FC = () => {
         }}
       >
         <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 600 }}>
-          CIPS 2008
+          功率模块寿命分析
         </Typography>
         {!isMobile && (
           <IconButton onClick={handleDrawerToggle} size="small">
@@ -158,7 +162,7 @@ export const MainLayout: React.FC = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            CIPS 2008 寿命预测软件
+            功率模块寿命分析软件
           </Typography>
         </Toolbar>
       </AppBar>

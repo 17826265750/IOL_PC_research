@@ -1,6 +1,9 @@
 """
 CIPS 2008 (Bayerer) Model for lifetime prediction.
 
+功率模块寿命分析软件 - CIPS 2008寿命模型
+Author: GSH
+
 The CIPS 2008 model, also known as the Bayerer model, is a comprehensive
 lifetime prediction model developed by Bayerer et al. (2008) for IGBT
 modules. It accounts for multiple stress factors affecting power module

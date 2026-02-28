@@ -1,6 +1,9 @@
 """
 Analysis endpoints for advanced reliability analysis.
 
+功率模块寿命分析软件 - 可靠性分析API
+Author: GSH
+
 Provides endpoints for:
 - Weibull reliability analysis
 - Model parameter fitting

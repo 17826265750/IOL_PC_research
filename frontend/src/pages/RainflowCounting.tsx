@@ -1,3 +1,7 @@
+/**
+ * 功率模块寿命分析软件 - 雨流计数页面
+ * @author GSH
+ */
 import React, { useMemo, useCallback } from 'react'
 import {
   Box,
