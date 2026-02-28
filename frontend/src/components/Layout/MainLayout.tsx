@@ -26,6 +26,7 @@ import {
   ShowChart as DamageIcon,
   ChevronLeft as ChevronLeftIcon,
   Science as FittingIcon,
+  Analytics as WeibullIcon,
 } from '@mui/icons-material'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 
@@ -44,6 +45,7 @@ const menuItems: MenuItemType[] = [
   { id: 'prediction', label: '寿命预测', icon: PredictionIcon, path: '/prediction' },
   { id: 'rainflow', label: '雨流计数', icon: RainflowIcon, path: '/rainflow' },
   { id: 'damage', label: '累计损伤与剩余寿命评估', icon: DamageIcon, path: '/damage' },
+  { id: 'weibull', label: '威布尔可靠性分析', icon: WeibullIcon, path: '/weibull' },
 ]
 
 export const MainLayout: React.FC = () => {

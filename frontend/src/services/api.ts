@@ -425,7 +425,135 @@ class ApiService {
     return this.get(`/rainflow/results/${id}`)
   }
 
+  // ============================================
+  // Weibull Reliability Analysis Endpoints
+  // ============================================
 
+  /**
+   * Fit Weibull distribution to failure data
+   */
+  async fitWeibull(data: {
+    failure_times: number[]
+    censored_times?: number[]
+    confidence_level?: number
+    method?: 'mle' | 'ls' | 'rrx' | 'rry'
+  }) {
+    // Map 'ls' to 'rry' for backend
+    const payload = {
+      ...data,
+      method: data.method === 'ls' ? 'rry' : data.method
+    }
+    try {
+      const response = await this.client.post('/analysis/weibull/fit', payload, {
+        signal: this.getAbortSignal(),
+      })
+      // Backend returns data directly, wrap it in ApiResponse format
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '威布尔拟合失败'
+      return { success: false, error: message }
+    }
+  }
+
+  /**
+   * Calculate B-life values (percentiles)
+   */
+  async calculateWeibullBLife(data: {
+    shape: number
+    scale: number
+    percentiles: number[]
+  }) {
+    try {
+      const response = await this.client.post('/analysis/weibull/b-life', data, {
+        signal: this.getAbortSignal(),
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'B寿命计算失败'
+      return { success: false, error: message }
+    }
+  }
+
+  /**
+   * Calculate reliability at given time points
+   */
+  async calculateWeibullReliability(data: {
+    shape: number
+    scale: number
+    times: number[]
+  }) {
+    try {
+      const response = await this.client.post('/analysis/weibull/reliability', data, {
+        signal: this.getAbortSignal(),
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '可靠度计算失败'
+      return { success: false, error: message }
+    }
+  }
+
+  /**
+   * Calculate hazard rate at given time points
+   */
+  async calculateWeibullHazardRate(data: {
+    shape: number
+    scale: number
+    times: number[]
+  }) {
+    try {
+      const response = await this.client.post('/analysis/weibull/hazard-rate', data, {
+        signal: this.getAbortSignal(),
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '失效率计算失败'
+      return { success: false, error: message }
+    }
+  }
+
+  /**
+   * Get probability plot data
+   */
+  async getWeibullProbabilityPlot(data: {
+    failure_times: number[]
+    censored_times?: number[]
+  }) {
+    try {
+      const response = await this.client.post('/analysis/weibull/probability-plot', data, {
+        signal: this.getAbortSignal(),
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '概率图数据获取失败'
+      return { success: false, error: message }
+    }
+  }
+
+  /**
+   * Get PDF/CDF curve data
+   */
+  async getWeibullCurve(data: {
+    shape: number
+    scale: number
+    t_min: number
+    t_max: number
+    num_points?: number
+  }) {
+    try {
+      const response = await this.client.post('/analysis/weibull/curve', data, {
+        signal: this.getAbortSignal(),
+      })
+      return { success: true, data: response.data }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '曲线数据获取失败'
+      return { success: false, error: message }
+    }
+  }
+
+  // ============================================
+  // Export Endpoints
+  // ============================================
 
   /**
    * Export prediction as PDF report

@@ -58,13 +58,14 @@ class WeibullAnalysisError(Exception):
 def fit_weibull(
     failure_data: List[float],
     censored_data: Optional[List[float]] = None,
-    confidence_level: float = 0.9
+    confidence_level: float = 0.9,
+    method: str = "mle"
 ) -> WeibullResult:
-    """Fit Weibull distribution to failure data using MLE.
+    """Fit Weibull distribution to failure data.
 
     This function fits a 2-parameter or 3-parameter Weibull distribution
-    to failure data using Maximum Likelihood Estimation (MLE). Handles
-    both complete and censored (suspension) data.
+    to failure data using the specified method. Handles both complete
+    and censored (suspension) data.
 
     Args:
         failure_data: List of failure times (cycles or hours). Must contain
@@ -73,6 +74,9 @@ def fit_weibull(
             units that did not fail by the end of the test.
         confidence_level: Confidence level for intervals (0-1). Default 0.9
             for 90% confidence intervals.
+        method: Fitting method - 'mle' for Maximum Likelihood Estimation,
+            'rrx' for Rank Regression on X, 'rry' for Rank Regression on Y.
+            Default is 'mle'.
 
     Returns:
         WeibullResult with fitted parameters and life estimates.
@@ -82,7 +86,7 @@ def fit_weibull(
 
     Examples:
         >>> failures = [100, 200, 300, 400, 500]
-        >>> result = fit_weibull(failures)
+        >>> result = fit_weibull(failures, method='mle')
         >>> print(f"B10 life: {result.b10_life:.1f} cycles")
     """
     # Validate inputs
@@ -111,13 +115,16 @@ def fit_weibull(
     # Using Bernard's approximation for median rank
     median_ranks = _calculate_median_ranks(n_failures)
 
-    # Fit using MLE via scipy.stats
+    # Fit using selected method
     try:
-        if n_censored > 0:
-            # For censored data, we need custom likelihood
+        if method.lower() in ['rrx', 'rry', 'rank_regression', 'ls']:
+            # Rank Regression (Least Squares on probability plot)
+            shape, scale, loc = _fit_weibull_rank_regression(failures_sorted, median_ranks, method)
+        elif n_censored > 0:
+            # For censored data, use MLE with custom likelihood
             shape, scale, loc = _fit_censored_weibull(failures_sorted, censored)
         else:
-            # For complete data, use scipy's built-in fit
+            # For complete data, use scipy's built-in MLE fit
             # Fixed location at 0 for 2-parameter Weibull
             params = stats.weibull_min.fit(failures_sorted, floc=0)
             shape, loc, scale = params[0], params[1], params[2]
@@ -156,6 +163,62 @@ def fit_weibull(
         mttf=mttf,
         confidence_interval=confidence_interval
     )
+
+
+def _fit_weibull_rank_regression(
+    failures: np.ndarray,
+    median_ranks: np.ndarray,
+    method: str = 'rrx'
+) -> Tuple[float, float, float]:
+    """Fit Weibull using Rank Regression (Least Squares).
+
+    Rank Regression fits a line through the probability plot:
+    - X = ln(failure_time)
+    - Y = ln(-ln(1 - F)) where F is the median rank
+
+    The Weibull parameters are derived from the line:
+    - slope (β) = shape parameter
+    - intercept = -β * ln(η), so η = exp(-intercept / slope)
+
+    Args:
+        failures: Sorted failure times
+        median_ranks: Median ranks for each failure
+        method: 'rrx' for regression on X (minimize horizontal distance),
+                'rry' for regression on Y (minimize vertical distance)
+
+    Returns:
+        Tuple of (shape, scale, location) parameters
+    """
+    # Transform data for probability plot
+    x = np.log(failures)  # ln(time)
+
+    # Clamp median ranks to avoid log(0)
+    mr_clamped = np.clip(median_ranks, 1e-10, 1 - 1e-10)
+    y = np.log(-np.log(1 - mr_clamped))  # ln(-ln(1-F))
+
+    if method.lower() in ['rry', 'rank_regression']:
+        # Regression on Y (minimize vertical distance - standard least squares)
+        # y = β*x - β*ln(η)
+        slope, intercept = np.polyfit(x, y, 1)
+    else:
+        # Regression on X (minimize horizontal distance)
+        # Swap x and y, then fit
+        inv_slope, inv_intercept = np.polyfit(y, x, 1)
+        slope = 1 / inv_slope
+        intercept = -inv_intercept / inv_slope
+
+    # Derive Weibull parameters
+    shape = slope  # β = slope
+    if shape <= 0:
+        raise WeibullAnalysisError("Rank regression produced invalid shape parameter")
+
+    # From y = β*x - β*ln(η): intercept = -β*ln(η)
+    # Therefore: ln(η) = -intercept / β
+    scale = np.exp(-intercept / slope)
+    if scale <= 0:
+        raise WeibullAnalysisError("Rank regression produced invalid scale parameter")
+
+    return shape, scale, 0.0
 
 
 def calculate_b_life(shape: float, scale: float, percentile: float) -> float:

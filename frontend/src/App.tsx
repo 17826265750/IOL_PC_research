@@ -14,6 +14,7 @@ import {
   Prediction,
   RainflowCounting,
   DamageAssessment,
+  WeibullAnalysis,
 } from '@/pages'
 import theme from '@/theme/theme'
 
@@ -30,6 +31,7 @@ function App() {
               <Route path="prediction" element={<Prediction />} />
               <Route path="rainflow" element={<RainflowCounting />} />
               <Route path="damage" element={<DamageAssessment />} />
+              <Route path="weibull" element={<WeibullAnalysis />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

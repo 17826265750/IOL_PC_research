@@ -459,3 +459,196 @@ export interface ExportOptions {
   /** File name (without extension) */
   fileName?: string
 }
+
+// ============================================
+// Weibull Reliability Analysis Types
+// ============================================
+
+/**
+ * Weibull distribution fit request
+ */
+export interface WeibullFitRequest {
+  /** Failure times (cycles to failure) */
+  failure_times: number[]
+  /** Censored times (suspension times) */
+  censored_times?: number[]
+  /** Confidence level for intervals (0-1) */
+  confidence_level?: number
+}
+
+/**
+ * Weibull distribution fit result
+ */
+export interface WeibullFitResult {
+  /** Shape parameter (β) - determines failure pattern */
+  shape: number
+  /** Scale parameter (η) - characteristic life (63.2% failed) */
+  scale: number
+  /** Location parameter (γ) - minimum life, usually 0 */
+  location?: number
+  /** Coefficient of determination - goodness of fit */
+  r_squared: number
+  /** Mean Time To Failure */
+  mttf: number
+  /** Standard error of shape parameter */
+  shape_std_error?: number
+  /** Standard error of scale parameter */
+  scale_std_error?: number
+  /** B10 life - 10% failed (90% reliability) */
+  b10: number
+  /** B50 life - 50% failed (median life) */
+  b50: number
+  /** B63.2 life - characteristic life (equals η) */
+  b63_2: number
+  /** Confidence intervals for shape parameter */
+  shape_ci?: {
+    lower: number
+    upper: number
+  }
+  /** Confidence intervals for scale parameter */
+  scale_ci?: {
+    lower: number
+    upper: number
+  }
+  /** Confidence level used (0-1) */
+  confidence_level?: number
+}
+
+/**
+ * B-life calculation request
+ */
+export interface WeibullBLifeRequest {
+  /** Shape parameter (β) */
+  shape: number
+  /** Scale parameter (η) */
+  scale: number
+  /** Percentile values to calculate (e.g., [10, 50, 63.2]) */
+  percentiles: number[]
+}
+
+/**
+ * B-life calculation result
+ */
+export interface WeibullBLifeResult {
+  /** Map of percentile to life value */
+  b_lifes: Record<string, number>
+}
+
+/**
+ * Reliability calculation request
+ */
+export interface WeibullReliabilityRequest {
+  /** Shape parameter (β) */
+  shape: number
+  /** Scale parameter (η) */
+  scale: number
+  /** Time points to calculate reliability */
+  times: number[]
+}
+
+/**
+ * Reliability calculation result
+ */
+export interface WeibullReliabilityResult {
+  /** Time points */
+  times: number[]
+  /** Reliability values (0-1) at each time point */
+  reliabilities: number[]
+  /** Lower confidence bounds (optional) */
+  lower_ci?: number[]
+  /** Upper confidence bounds (optional) */
+  upper_ci?: number[]
+}
+
+/**
+ * Hazard rate calculation request
+ */
+export interface WeibullHazardRequest {
+  /** Shape parameter (β) */
+  shape: number
+  /** Scale parameter (η) */
+  scale: number
+  /** Time points to calculate hazard rate */
+  times: number[]
+}
+
+/**
+ * Hazard rate calculation result
+ */
+export interface WeibullHazardResult {
+  /** Time points */
+  times: number[]
+  /** Hazard rate values at each time point */
+  hazard_rates: number[]
+}
+
+/**
+ * Probability plot data request
+ */
+export interface WeibullProbabilityPlotRequest {
+  /** Failure times */
+  failure_times: number[]
+  /** Censored times (optional) */
+  censored_times?: number[]
+}
+
+/**
+ * Probability plot data point
+ */
+export interface WeibullProbabilityPlotPoint {
+  /** Original failure time */
+  time: number
+  /** Natural log of time (x-axis) */
+  ln_time: number
+  /** Median rank / estimated CDF (y-axis in Weibull scale) */
+  median_rank: number
+  /** Weibull scale y value: ln(-ln(1-F)) */
+  weibull_y: number
+}
+
+/**
+ * Probability plot data result
+ */
+export interface WeibullProbabilityPlotResult {
+  /** Data points for plotting */
+  points: WeibullProbabilityPlotPoint[]
+  /** Fitted line coordinates */
+  fitted_line: {
+    /** X values (ln_time) */
+    x: number[]
+    /** Y values (weibull_y) */
+    y: number[]
+  }
+}
+
+/**
+ * Weibull curve data request
+ */
+export interface WeibullCurveRequest {
+  /** Shape parameter (β) */
+  shape: number
+  /** Scale parameter (η) */
+  scale: number
+  /** Minimum time */
+  t_min: number
+  /** Maximum time */
+  t_max: number
+  /** Number of points */
+  num_points?: number
+}
+
+/**
+ * Weibull curve data result (PDF and CDF)
+ */
+export interface WeibullCurveResult {
+  /** Time points */
+  times: number[]
+  /** Probability Density Function values */
+  pdf: number[]
+  /** Cumulative Distribution Function values */
+  cdf: number[]
+  /** Reliability function values (1 - CDF) */
+  reliability: number[]
+  /** Hazard rate values */
+  hazard_rate: number[]
+}

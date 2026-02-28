@@ -58,8 +58,8 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 # ==================== Weibull Analysis Endpoints ====================
 
-@router.post("/weibull/fit", response_model=WeibullAnalysisResponse)
-async def perform_weibull_analysis(request: WeibullAnalysisRequest):
+@router.post("/weibull/fit")
+async def perform_weibull_analysis(request: Request) -> Dict[str, Any]:
     """
     Perform Weibull reliability analysis on failure data.
 
@@ -68,9 +68,20 @@ async def perform_weibull_analysis(request: WeibullAnalysisRequest):
     - Scale parameter (eta) - characteristic life
     - B10, B50, B63.2 life values
     - MTTF (Mean Time To Failure)
+
+    Methods:
+    - mle: Maximum Likelihood Estimation (default)
+    - rrx: Rank Regression on X
+    - rry: Rank Regression on Y
     """
     try:
-        if len(request.failure_times) < 2:
+        body = await request.json()
+        failure_times = body.get("failure_times", [])
+        censored_times = body.get("censored_times", [])
+        confidence_level = body.get("confidence_level", 0.9)
+        method = body.get("method", "mle")
+
+        if len(failure_times) < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least 2 failure times required"
@@ -78,17 +89,32 @@ async def perform_weibull_analysis(request: WeibullAnalysisRequest):
 
         # Fit Weibull distribution
         result = fit_weibull(
-            failure_times=request.failure_times,
-            censored_data=None,  # Could extend schema for censored data
-            confidence_level=0.9
+            failure_data=failure_times,
+            censored_data=censored_times if censored_times else None,
+            confidence_level=confidence_level,
+            method=method
         )
 
-        return WeibullAnalysisResponse(
-            shape_parameter=result.shape,
-            scale_parameter=result.scale,
-            characteristic_life=result.b63_life,
-            mtbf=result.mttf
-        )
+        # Return comprehensive result matching frontend expectations
+        return {
+            "shape": result.shape,
+            "scale": result.scale,
+            "location": result.location,
+            "r_squared": result.r_squared,
+            "mttf": result.mttf,
+            "b10": result.b10_life,
+            "b50": result.b50_life,
+            "b63_2": result.b63_life,
+            "confidence_level": 0.9,
+            "shape_ci": {
+                "lower": result.confidence_interval[0] if result.confidence_interval else None,
+                "upper": result.confidence_interval[1] if result.confidence_interval else None
+            } if result.confidence_interval else None,
+            "scale_ci": {
+                "lower": result.confidence_interval[0] if result.confidence_interval else None,
+                "upper": result.confidence_interval[1] if result.confidence_interval else None
+            } if result.confidence_interval else None
+        }
 
     except ValueError as e:
         raise HTTPException(
@@ -104,11 +130,7 @@ async def perform_weibull_analysis(request: WeibullAnalysisRequest):
 
 
 @router.post("/weibull/b-life")
-async def calculate_b_life(
-    shape: float,
-    scale: float,
-    percentile: float
-) -> Dict[str, float]:
+async def calculate_b_life_endpoint(request: Request) -> Dict[str, Any]:
     """
     Calculate life at given failure probability.
 
@@ -116,23 +138,34 @@ async def calculate_b_life(
     will have failed. For example, B10 is the time at 10% failures.
     """
     try:
+        body = await request.json()
+        shape = body.get("shape")
+        scale = body.get("scale")
+        percentiles = body.get("percentiles", [])
+
+        if shape is None or scale is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="shape and scale are required"
+            )
+
         if shape <= 0 or scale <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Shape and scale must be positive"
             )
 
-        if not (0 < percentile < 1):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Percentile must be between 0 and 1"
-            )
-
-        b_life = calculate_b_life(shape, scale, percentile)
+        b_lifes = {}
+        for p in percentiles:
+            if not (0 < p < 100):
+                continue
+            # Convert percentage to fraction
+            fraction = p / 100
+            b_life = calculate_b_life(shape, scale, fraction)
+            b_lifes[str(p)] = float(b_life)
 
         return {
-            "percentile": percentile,
-            "b_life": float(b_life),
+            "b_lifes": b_lifes,
             "shape": shape,
             "scale": scale
         }
@@ -148,25 +181,37 @@ async def calculate_b_life(
 
 
 @router.post("/weibull/reliability")
-async def calculate_reliability_at_time(
-    shape: float,
-    scale: float,
-    time: float,
-    location: float = 0.0
-) -> Dict[str, float]:
+async def calculate_reliability_endpoint(request: Request) -> Dict[str, Any]:
     """
-    Calculate reliability at given time.
+    Calculate reliability at given time points.
 
     Reliability R(t) is the probability that a unit will survive
     beyond time t without failure.
     """
     try:
-        reliability = calculate_reliability(shape, scale, time, location)
+        body = await request.json()
+        shape = body.get("shape")
+        scale = body.get("scale")
+        times = body.get("times", [])
+        location = body.get("location", 0.0)
+
+        if shape is None or scale is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="shape and scale are required"
+            )
+
+        if not times:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="times array is required"
+            )
+
+        reliabilities = [float(calculate_reliability(shape, scale, t, location)) for t in times]
 
         return {
-            "time": time,
-            "reliability": float(reliability),
-            "failure_probability": float(1 - reliability),
+            "times": times,
+            "reliabilities": reliabilities,
             "shape": shape,
             "scale": scale,
             "location": location
@@ -186,24 +231,37 @@ async def calculate_reliability_at_time(
 
 
 @router.post("/weibull/hazard-rate")
-async def calculate_hazard(
-    shape: float,
-    scale: float,
-    time: float,
-    location: float = 0.0
-) -> Dict[str, float]:
+async def calculate_hazard_endpoint(request: Request) -> Dict[str, Any]:
     """
-    Calculate instantaneous hazard rate at given time.
+    Calculate instantaneous hazard rate at given time points.
 
     The hazard rate h(t) is the instantaneous failure rate given
     survival to time t.
     """
     try:
-        hazard = calculate_hazard_rate(shape, scale, time, location)
+        body = await request.json()
+        shape = body.get("shape")
+        scale = body.get("scale")
+        times = body.get("times", [])
+        location = body.get("location", 0.0)
+
+        if shape is None or scale is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="shape and scale are required"
+            )
+
+        if not times:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="times array is required"
+            )
+
+        hazard_rates = [float(calculate_hazard_rate(shape, scale, t, location)) for t in times]
 
         return {
-            "time": time,
-            "hazard_rate": float(hazard),
+            "times": times,
+            "hazard_rates": hazard_rates,
             "shape": shape,
             "scale": scale,
             "location": location
@@ -223,7 +281,7 @@ async def calculate_hazard(
 
 
 @router.post("/weibull/probability-plot")
-async def generate_weibull_plot_data(failure_times: List[float]) -> Dict[str, Any]:
+async def generate_weibull_plot_data(request: Request) -> Dict[str, Any]:
     """
     Generate data for Weibull probability plot.
 
@@ -231,6 +289,10 @@ async def generate_weibull_plot_data(failure_times: List[float]) -> Dict[str, An
     the points will fall approximately on a straight line.
     """
     try:
+        body = await request.json()
+        failure_times = body.get("failure_times", [])
+        censored_times = body.get("censored_times", [])
+
         if len(failure_times) < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -239,9 +301,33 @@ async def generate_weibull_plot_data(failure_times: List[float]) -> Dict[str, An
 
         x_values, y_values = weibull_probability_plot_data(failure_times)
 
+        # Build points array
+        points = []
+        for i, t in enumerate(failure_times):
+            points.append({
+                "time": t,
+                "ln_time": float(x_values[i]),
+                "median_rank": 1 - np.exp(-np.exp(y_values[i])),  # Convert back from Weibull scale
+                "weibull_y": float(y_values[i])
+            })
+
+        # Calculate fitted line (linear regression on ln-ln scale)
+        # y = β * ln(t) - β * ln(η)
+        # Fit line through the data
+        x_arr = np.array(x_values)
+        y_arr = np.array(y_values)
+        slope = np.polyfit(x_arr, y_arr, 1)[0]
+        intercept = np.polyfit(x_arr, y_arr, 1)[1]
+
+        fitted_line_x = np.linspace(float(x_arr.min()), float(x_arr.max()), 50)
+        fitted_line_y = slope * fitted_line_x + intercept
+
         return {
-            "x_values": x_values.tolist(),
-            "y_values": y_values.tolist(),
+            "points": points,
+            "fitted_line": {
+                "x": fitted_line_x.tolist(),
+                "y": fitted_line_y.tolist()
+            },
             "failure_times": failure_times,
             "n": len(failure_times)
         }
@@ -260,50 +346,49 @@ async def generate_weibull_plot_data(failure_times: List[float]) -> Dict[str, An
 
 
 @router.post("/weibull/curve")
-async def generate_weibull_curve(
-    shape: float,
-    scale: float,
-    time_range: List[float],
-    location: float = 0.0,
-    curve_type: str = "cdf"
-) -> Dict[str, Any]:
+async def generate_weibull_curve_endpoint(request: Request) -> Dict[str, Any]:
     """
-    Generate Weibull PDF or CDF curve data.
+    Generate Weibull PDF, CDF, reliability, and hazard curve data.
 
     Returns curve values for the specified time range.
     """
     try:
+        body = await request.json()
+        shape = body.get("shape")
+        scale = body.get("scale")
+        t_min = body.get("t_min", 0)
+        t_max = body.get("t_max", 1000)
+        num_points = body.get("num_points", 100)
+        location = body.get("location", 0.0)
+
+        if shape is None or scale is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="shape and scale are required"
+            )
+
         if shape <= 0 or scale <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Shape and scale must be positive"
             )
 
-        if len(time_range) < 2:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Time range must have at least 2 values"
-            )
+        times = np.linspace(t_min, t_max, num_points)
 
-        times = np.linspace(time_range[0], time_range[1], 100)
-
-        if curve_type == "pdf":
-            values = weibull_pdf(shape, scale, times, location)
-        elif curve_type == "cdf":
-            values = weibull_cdf(shape, scale, times, location)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="curve_type must be 'pdf' or 'cdf'"
-            )
+        pdf_values = weibull_pdf(shape, scale, times, location)
+        cdf_values = weibull_cdf(shape, scale, times, location)
+        reliability_values = 1 - cdf_values
+        hazard_values = np.array([calculate_hazard_rate(shape, scale, t, location) for t in times])
 
         return {
             "times": times.tolist(),
-            "values": values.tolist(),
+            "pdf": pdf_values.tolist(),
+            "cdf": cdf_values.tolist(),
+            "reliability": reliability_values.tolist(),
+            "hazard_rate": hazard_values.tolist(),
             "shape": shape,
             "scale": scale,
-            "location": location,
-            "curve_type": curve_type
+            "location": location
         }
 
     except HTTPException:
